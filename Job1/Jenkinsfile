@@ -7,7 +7,7 @@ pipeline {
         stage('Clone repository') {
             steps {
                 echo "Running on ${NODE_NAME}."
-                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], gitTool: 'Default', submoduleCfg: [], userRemoteConfigs: [[credentialsId:  'gitlab-credentials', url: 'https://yoko.ukrtux.com/blacksun0504/petclinic_project/']]])
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], gitTool: 'Default', submoduleCfg: [], userRemoteConfigs: [[credentialsId:  'gitlab-credentials', url: 'https://yoko.ukrtux.com/blacksun0504/petclinic-project/']]])
             }
         }
 
@@ -36,16 +36,17 @@ pipeline {
                 }
             }
         }
-    }
 
-    stage('Tag git commit') {
-      steps{
-          sshagent (credentials: ['464b0ae2-8c8a-4c41-9b8e-c34b1f5e76c5']) {
+        stage('Tag Git commit') {
+            steps{
+                withCredentials([usernamePassword(credentialsId: 'gitlab-credentials', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {
                     sh "git tag v$applicationVersion.$BUILD_NUMBER"
-                    sh "git push origin v$applicationVersion.$BUILD_NUMBER"
+                    sh('git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/my-org/my-repo.git --tags')
+                    // sh "git push origin v$applicationVersion.$BUILD_NUMBER"
                 }
 
-      }
+            }
+        }
     }
 
     post {
@@ -54,7 +55,6 @@ pipeline {
         }
         success {
             echo "Build ${BUILD_ID} is successful."
-
             cleanWs() /* clean up the workspace */
         }
         
