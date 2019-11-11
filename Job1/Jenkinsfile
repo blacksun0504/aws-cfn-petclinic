@@ -1,0 +1,66 @@
+pipeline {
+    agent { 
+        label 'jenkins-agent'
+    }
+
+    stages { 
+        stage('Clone repository') {
+            steps {
+                echo "Running on ${NODE_NAME}."
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], gitTool: 'Default', submoduleCfg: [], userRemoteConfigs: [[credentialsId:  'gitlab-credentials', url: 'https://yoko.ukrtux.com/blacksun0504/petclinic_project/']]])
+            }
+        }
+
+        stage('Build jar') {
+            steps {
+                sh label: '', script: '''cd ${WORKSPACE}/spring-petclinic
+                echo $PWD
+                sleep 10
+                mvn clean package && echo "Build ${BUILD_ID} is OK."
+                '''
+            }
+        }
+        stage('Build image') {
+            steps {
+                sh label: '', script: '''
+                echo $PWD
+                docker build -t 264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic:latest -f ${WORKSPACE}/Dockerfile ${WORKSPACE}/spring-petclinic/target'''
+            }
+        }
+        stage('Push image') {
+            steps {
+                script {
+                    docker.withRegistry('https://264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic', 'ecr:us-west-2:aws-admin-user') {
+                        sh "docker push 264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic:latest"
+                    }
+                }
+            }
+        }
+    }
+
+    stage('Tag git commit') {
+      steps{
+          sshagent (credentials: ['464b0ae2-8c8a-4c41-9b8e-c34b1f5e76c5']) {
+                    sh "git tag v$applicationVersion.$BUILD_NUMBER"
+                    sh "git push origin v$applicationVersion.$BUILD_NUMBER"
+                }
+
+      }
+    }
+
+    post {
+        always {
+            echo 'The pipeline run has been finished.'  
+        }
+        success {
+            echo "Build ${BUILD_ID} is successful."
+
+            cleanWs() /* clean up the workspace */
+        }
+        
+        failure {
+            echo "Build ${BUILD_ID} has failed. :("
+            cleanWs() /* clean up the workspace */
+        }
+    }
+}
