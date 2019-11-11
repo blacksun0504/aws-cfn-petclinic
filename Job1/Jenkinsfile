@@ -11,13 +11,16 @@ pipeline {
             }
         }
 
-        stage('Build jar') {
+        stage('Run test and build jar') {
             steps {
                 sh label: '', script: '''cd ${WORKSPACE}/spring-petclinic
                 echo $PWD
                 sleep 10
                 mvn clean package && echo "Build ${BUILD_ID} is OK."
                 '''
+                script {
+                    app_version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+                }
             }
         }
         stage('Build image') {
@@ -40,7 +43,7 @@ pipeline {
         stage('Tag Git commit') {
             steps{
                 withCredentials([usernamePassword(credentialsId: 'gitlab-credentials', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {
-                    sh "git tag v$applicationVersion.$BUILD_NUMBER"
+                    sh "git tag v$app_version.$BUILD_NUMBER"
                     sh('git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/my-org/my-repo.git --tags')
                     // sh "git push origin v$applicationVersion.$BUILD_NUMBER"
                 }
