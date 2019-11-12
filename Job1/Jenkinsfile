@@ -3,11 +3,19 @@ pipeline {
         label 'jenkins-agent'
     }
 
-    stages { 
+    // stages { 
+    //     stage('Clone repository') {
+    //         steps {
+    //             echo "Running on ${NODE_NAME}."
+    //             checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], gitTool: 'Default', submoduleCfg: [], userRemoteConfigs: [[credentialsId:  'gitlab-credentials', url: 'https://yoko.ukrtux.com/blacksun0504/petclinic-project/']]])
+    //         }
+    //     }
+
         stage('Clone repository') {
-            steps {
-                echo "Running on ${NODE_NAME}."
-                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], gitTool: 'Default', submoduleCfg: [], userRemoteConfigs: [[credentialsId:  'gitlab-credentials', url: 'https://yoko.ukrtux.com/blacksun0504/petclinic-project/']]])
+            steps{
+                sshagent (credentials: ['jenkins-gitlab-key']) {
+                    git branch: 'master', url: 'git@yoko.ukrtux.com:blacksun0504/petclinic-project.git', credentialsId: 'jenkins-gitlab-key'
+                }
             }
         }
 
@@ -49,7 +57,8 @@ pipeline {
                 // }
                 sshagent (credentials: ['jenkins-gitlab-key']) {
                     sh("git tag v${app_version}.$BUILD_NUMBER")
-                    sh("git push https://yoko.ukrtux.com/blacksun0504/petclinic-project.git  v${app_version}.$BUILD_NUMBER")
+                    // sh("git push https://yoko.ukrtux.com/blacksun0504/petclinic-project.git  v${app_version}.$BUILD_NUMBER")
+                    sh("git push origin v${app_version}.$BUILD_NUMBER")
                 }
 
             }
