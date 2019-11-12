@@ -3,6 +3,9 @@ pipeline {
         label 'jenkins-agent'
     }
 
+    environment {
+        registry = "https://264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic"
+    }
     // stages { 
     //     stage('Clone repository') {
     //         steps {
@@ -11,19 +14,17 @@ pipeline {
     //         }
     //     }
 
-        stage('Clone repository') {
+        stage('Clone Git repository') {
             steps{
-                sshagent (credentials: ['jenkins-gitlab-key']) {
+                // sshagent (credentials: ['jenkins-gitlab-key']) {
                     git branch: 'master', url: 'git@yoko.ukrtux.com:blacksun0504/petclinic-project.git', credentialsId: 'jenkins-gitlab-key'
-                }
+                // }
             }
         }
 
-        stage('Run test and build jar') {
+        stage('Run tests and build jar') {
             steps {
                 sh label: '', script: '''cd ${WORKSPACE}/spring-petclinic
-                echo $PWD
-                sleep 10
                 mvn clean package && echo "Build ${BUILD_ID} is OK."
                 '''
                 script {
@@ -31,18 +32,16 @@ pipeline {
                 }
             }
         }
-        stage('Build image') {
+        stage('Build Docker image') {
             steps {
-                sh label: '', script: '''
-                echo $PWD
-                docker build -t 264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic-${BUILD_NUMBER}:latest -f ${WORKSPACE}/Dockerfile ${WORKSPACE}/spring-petclinic/target'''
+                sh "docker build -t ${registry}:latest -t ${registry}:${app_version}.$BUILD_NUMBER -f ${WORKSPACE}/Dockerfile ${WORKSPACE}/spring-petclinic/target"
             }
         }
         stage('Push image') {
             steps {
                 script {
-                    docker.withRegistry('https://264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic', 'ecr:us-west-2:aws-admin-user') {
-                        sh "docker push 264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic:latest"
+                    docker.withRegistry( "${registry}", 'ecr:us-west-2:aws-admin-user') {
+                        sh "docker push ${registry}:latest"
                     }
                 }
             }
@@ -50,17 +49,11 @@ pipeline {
 
         stage('Tag Git commit') {
             steps{
-                // withCredentials([usernamePassword(credentialsId: 'gitlab-credentials', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {
-                //     // sh "git remote set-url origin https://yoko.ukrtux.com/blacksun0504/petclinic-project.git"
-                //     sh "git tag v${app_version}.$BUILD_NUMBER"
-                //     sh "git push https://yoko.ukrtux.com/blacksun0504/petclinic-project.git  v${app_version}.$BUILD_NUMBER"
-                // }
                 sshagent (credentials: ['jenkins-gitlab-key']) {
-                    sh("git tag v${app_version}.$BUILD_NUMBER")
+                    sh("git tag ${app_version}.$BUILD_NUMBER")
                     // sh("git push https://yoko.ukrtux.com/blacksun0504/petclinic-project.git  v${app_version}.$BUILD_NUMBER")
-                    sh("git push origin v${app_version}.$BUILD_NUMBER")
+                    sh("git push origin ${app_version}.$BUILD_NUMBER")
                 }
-
             }
         }
     }
