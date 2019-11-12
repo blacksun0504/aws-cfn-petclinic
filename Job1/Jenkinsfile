@@ -6,7 +6,8 @@ pipeline {
     environment {
         registry = "https://264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic"
     }
-    // stages { 
+    
+    stages { 
     //     stage('Clone repository') {
     //         steps {
     //             echo "Running on ${NODE_NAME}."
