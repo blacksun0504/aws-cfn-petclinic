@@ -45,7 +45,7 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'gitlab-credentials', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {
                     sh "git remote set-url origin https://yoko.ukrtux.com/blacksun0504/petclinic-project.git"
                     sh "git tag v${app_version}.$BUILD_NUMBER"
-                    sh "git push origin master v${app_version}.$BUILD_NUMBER"
+                    sh "git push origin v${app_version}.$BUILD_NUMBER"
                 }
 
             }
