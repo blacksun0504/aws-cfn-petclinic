@@ -17,9 +17,7 @@ pipeline {
 
         stage('Run tests and build jar') {
             steps {
-                sh label: '', script: '''cd ${WORKSPACE}/spring-petclinic
-                mvn clean package && echo "Build ${BUILD_ID} is OK."
-                '''
+                sh "mvn clean package"
                 script {
                     app_version=sh(returnStdout: true, script: 'mvn org.apache.maven.plugins:maven-help-plugin:3.2.0:evaluate -Dexpression=project.version -q -DforceStdout')
                 }
@@ -27,14 +25,16 @@ pipeline {
         }
         stage('Build Docker image') {
             steps {
-                sh "docker build -t ${registry}:latest -t ${registry}:${app_version}.$BUILD_NUMBER -f ${WORKSPACE}/Dockerfile ${WORKSPACE}/spring-petclinic/target"
+                sh "docker build -t ${registry}:latest -t ${registry}:${app_version}.$BUILD_NUMBER -f ./Dockerfile ./target"
             }
         }
+
         stage('Push image') {
             steps {
                 script {
                     docker.withRegistry( "https://${registry}", 'ecr:us-west-2:aws-admin-user') {
                         sh "docker push ${registry}:latest"
+                        sh "docker push ${registry}:${app_version}.$BUILD_NUMBER"
                     }
                 }
             }
@@ -44,7 +44,6 @@ pipeline {
             steps{
                 sshagent (credentials: ['jenkins-gitlab-key']) {
                     sh("git tag ${app_version}.$BUILD_NUMBER")
-                    // sh("git push https://yoko.ukrtux.com/blacksun0504/petclinic-project.git  v${app_version}.$BUILD_NUMBER")
                     sh("git push origin ${app_version}.$BUILD_NUMBER")
                 }
             }
