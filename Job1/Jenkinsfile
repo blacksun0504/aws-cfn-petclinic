@@ -42,10 +42,14 @@ pipeline {
 
         stage('Tag Git commit') {
             steps{
-                withCredentials([usernamePassword(credentialsId: 'gitlab-credentials', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {
-                    // sh "git remote set-url origin https://yoko.ukrtux.com/blacksun0504/petclinic-project.git"
-                    sh "git tag v${app_version}.$BUILD_NUMBER"
-                    sh "git push https://yoko.ukrtux.com/blacksun0504/petclinic-project.git  v${app_version}.$BUILD_NUMBER"
+                // withCredentials([usernamePassword(credentialsId: 'gitlab-credentials', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {
+                //     // sh "git remote set-url origin https://yoko.ukrtux.com/blacksun0504/petclinic-project.git"
+                //     sh "git tag v${app_version}.$BUILD_NUMBER"
+                //     sh "git push https://yoko.ukrtux.com/blacksun0504/petclinic-project.git  v${app_version}.$BUILD_NUMBER"
+                // }
+                sshagent (credentials: ['jenkins-gitlab-key']) {
+                    sh("git tag v${app_version}.$BUILD_NUMBER")
+                    sh("git push https://yoko.ukrtux.com/blacksun0504/petclinic-project.git  v${app_version}.$BUILD_NUMBER")
                 }
 
             }
