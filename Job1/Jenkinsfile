@@ -4,22 +4,14 @@ pipeline {
     }
 
     environment {
-        registry = "https://264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic"
+        registry = "264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic"
     }
-    
+
     stages { 
-    //     stage('Clone repository') {
-    //         steps {
-    //             echo "Running on ${NODE_NAME}."
-    //             checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], gitTool: 'Default', submoduleCfg: [], userRemoteConfigs: [[credentialsId:  'gitlab-credentials', url: 'https://yoko.ukrtux.com/blacksun0504/petclinic-project/']]])
-    //         }
-    //     }
 
         stage('Clone Git repository') {
             steps{
-                // sshagent (credentials: ['jenkins-gitlab-key']) {
                     git branch: 'master', url: 'git@yoko.ukrtux.com:blacksun0504/petclinic-project.git', credentialsId: 'jenkins-gitlab-key'
-                // }
             }
         }
 
@@ -41,7 +33,7 @@ pipeline {
         stage('Push image') {
             steps {
                 script {
-                    docker.withRegistry( "${registry}", 'ecr:us-west-2:aws-admin-user') {
+                    docker.withRegistry( "https://${registry}", 'ecr:us-west-2:aws-admin-user') {
                         sh "docker push ${registry}:latest"
                     }
                 }
