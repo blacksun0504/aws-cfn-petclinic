@@ -18,11 +18,12 @@ pipeline {
         stage('Validate the Cloudformation templates') {
             steps {
                 sh script: '''
-                if [[ $(cfn-lint --version) ]]; 
+                if $(cfn-lint --version) > /dev/null; 
                 then 
+                    echo "cfn-lint is installed."
                     cfn-lint ${WORKSPACE}/Job3/infrastructure.yml;
                 else
-                    sudo apt install python-pip -y && sudo pip install  cfn-lint &&
+                    sudo apt install python-pip -y && sudo pip install cfn-lint
                     cfn-lint ${WORKSPACE}/Job3/infrastructure.yml;
                 fi
                 aws cloudformation validate-template --template-body file://${WORKSPACE}/Job3/infrastructure.yml
