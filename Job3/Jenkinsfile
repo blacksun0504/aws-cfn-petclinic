@@ -38,7 +38,7 @@ pipeline {
         }
         stage('Create or update the Cloudformation stack') {
             steps {
-                sh "aws cloudformation deploy --stack-name ${stack_name} --template-file https://s3.amazonaws.com/devopslabs3/cfn-templates/infrastructure.yml"
+                sh "aws cloudformation deploy --stack-name ${stack_name} --s3-bucket devopslabs3/cfn-templates --template-file ${WORKSPACE}/Job3/infrastructure.yml --capabilities CAPABILITY_IAM"
             }
         }
     }
