@@ -1,0 +1,384 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AWS CloudFormation template to create a new VPC
+  with the ECS cluster and ASG.
+Parameters:
+  VpcCidr:
+    Type: String
+    Description: Specifies the CIDR Block of VPC
+    Default: '10.10.0.0/16'
+  SubnetCidr1:
+    Type: String
+    Description: Specifies the CIDR Block of Subnet 1
+    Default: '10.10.0.0/24'
+  SubnetCidr2:
+    Type: String
+    Description: Specifies the CIDR Block of Subnet 2
+    Default: '10.10.1.0/24'
+  SubnetCidr3:
+    Type: String
+    Description: Specifies the CIDR Block of Subnet 3
+    Default: '10.10.2.0/24'
+  SubnetCidr4:
+    Type: String
+    Description: Specifies the CIDR Block of Subnet 4
+    Default: '10.10.3.0/24'
+  EcsAmiId:
+    Type: String
+    Description: Specifies the AMI ID for the container instances.
+    Default: 'ami-0fb71e703258ab7eb' # ECS-optimized Amazon Linux AMI 2
+  EcsInstanceType:
+    Type: String
+    Description: >
+      Specifies the EC2 instance type for the container instances.
+    Default: t2.micro
+    ConstraintDescription: must be a valid EC2 instance type.
+  EcsTaskCount:
+    Type: Number
+    Default: 2
+  EcsServiceRole:
+    Type: String
+    Default: 'arn:aws:iam::264800517173:role/aws-service-role/ecs.amazonaws.com/AWSServiceRoleForECS'
+  EcsInstanceProfile:
+    Type: String
+    Default: 'arn:aws:iam::264800517173:instance-profile/ecsInstanceRole'
+  EcsTaskExecRole:
+    Type: String
+    Default: 'arn:aws:iam::264800517173:role/ecsTaskExecutionRole'
+  # EcsContainerPort:
+  #   Type: Number
+  #   Default: 80
+  KeyName:
+    Type: String
+    Default: DevopsLabKeys
+ 
+Resources:
+# -------------------------------------
+#             NETWORKING 
+# -------------------------------------
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: vpc01
+  # Create two public subnets in different AZ
+  PubSubnetAz1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref SubnetCidr1
+      AvailabilityZone: 'us-west-2a'
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: vpc01-pub01
+  PubSubnetAz2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref SubnetCidr2
+      AvailabilityZone: 'us-west-2b'
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: 'vpc01-pub02'
+  # Create two private subnets in different AZ
+  PrivSubnetAz1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref SubnetCidr3
+      AvailabilityZone: 'us-west-2a'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: 'vpc01-priv01'
+  PrivSubnetAz2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref SubnetCidr4
+      AvailabilityZone: 'us-west-2b'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: 'vpc01-priv02'
+  # Create internet gateway and attach it to VPC
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: 'vpc01-igw'
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+  # Create a routing table for public subnets with internet gateway
+  RouteViaIgw:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+  PublicRouteViaIgw:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref RouteViaIgw
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+  # Associate routing table 1 with public subnets
+  PubSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PubSubnetAz1
+      RouteTableId: !Ref RouteViaIgw
+  PubSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PubSubnetAz2
+      RouteTableId: !Ref RouteViaIgw
+  # Create a NAT gateway with EIP to provide internet access for private subnets
+  NatEip:
+    Type: AWS::EC2::EIP
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: !Ref PubSubnetAz1
+      AllocationId: !GetAtt NatEip.AllocationId
+  # Create a routing table for public subnets with NAT gateway attachment
+  RouteViaNat:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+  PrivateRouteViaNat:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteViaNat
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway
+  # Associate routing table 2 with private subnets
+  PrivSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivSubnetAz1
+      RouteTableId: !Ref RouteViaNat
+  PrivSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivSubnetAz2
+      RouteTableId: !Ref RouteViaNat
+
+# -------------------------------------
+#          SECURITY GROUPS 
+# -------------------------------------
+  # Create a security group for allowing traffic from everywhere on ports 80, 8080, and 22
+  SecurityGroup01:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: 'Allow traffic from everywhere on ports 80 and 22.'
+      GroupName: 'vpc01: public access'
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - 
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: '0.0.0.0/0'
+        - 
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+        - 
+          IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: '0.0.0.0/0'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 0
+          CidrIp: '0.0.0.0/0'
+      Tags: 
+        - Key: Name
+          Value: 'vpc01-sg01'
+
+  # Create a security group for allowing traffic to ECS instances from everywhere on all ports from the ALB
+  SecurityGroup02:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: 'Allow traffic from ALB to the ECS instances on all ports.'
+      GroupName: 'vpc01: ecs access'
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          SourceSecurityGroupId: !GetAtt SecurityGroup01.GroupId
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 0
+          CidrIp: '0.0.0.0/0'
+      Tags: 
+        - Key: Name
+          Value: 'vpc01-sg02'
+
+# -------------------------------------
+#             AUTOSCALING 
+# -------------------------------------
+  # Create a launch configuration for ECS ASG 
+  EcsInstanceLc:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !Ref EcsAmiId
+      InstanceType: !Ref EcsInstanceType
+      AssociatePublicIpAddress: true
+      IamInstanceProfile: !Ref EcsInstanceProfile
+      KeyName: !Ref KeyName
+      SecurityGroups: [ !Ref SecurityGroup02 ]
+      PlacementTenancy: default
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config
+
+  # Create an ASG for the ECS cluster
+  EcsInstanceAsg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: AttachGateway
+    Properties:
+      AutoScalingGroupName: petclinic-asg
+      LaunchConfigurationName: !Ref EcsInstanceLc
+      HealthCheckGracePeriod: 300
+      HealthCheckType: EC2
+      VPCZoneIdentifier:
+        - !Ref PubSubnetAz1
+        - !Ref PubSubnetAz2
+      TargetGroupARNs:
+        - !Ref TargetGroup01
+      MinSize: 1
+      DesiredCapacity: 1
+      MaxSize: 2
+      Tags:
+        - Key: Name
+          Value: 'petclinic-asg'
+          PropagateAtLaunch: true
+
+  AsgScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties: 
+      AutoScalingGroupName: !Ref EcsInstanceAsg
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 75
+
+# -------------------------------------
+#           ECS CLUSTER 
+# -------------------------------------
+  # Create ECS cluster
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties: 
+      ClusterName: 'cluster01'
+      Tags: 
+        - Key: Name
+          Value: 'petclinic-cluster'
+
+  # Create a task definition for the Petclinic service
+  EscTaskDef:
+    Type: AWS::ECS::TaskDefinition
+    Properties: 
+      Family: petclinic_taskdef01
+      RequiresCompatibilities:
+        - "EC2"
+      ContainerDefinitions: 
+        - Name: 'petclinic-app'
+          Image: 'tutum/hello-world'
+          PortMappings: 
+            - ContainerPort: 80
+              HostPort: 0
+      Cpu: 1024
+      ExecutionRoleArn: !Ref EcsTaskExecRole
+      Memory: 500
+      NetworkMode: bridge
+      Tags: 
+        - Key: Name
+          Value: 'petclinic-taskdef'
+
+  # Create an ECS service based on the task defition created earlier
+  EcsService:
+    Type: AWS::ECS::Service
+    DependsOn: HttpListener
+    Properties: 
+      ServiceName: 'srv01-petclinic'
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref EscTaskDef
+      DesiredCount: !Ref EcsTaskCount
+      LaunchType: EC2
+      HealthCheckGracePeriodSeconds: 300
+      Role: !Ref EcsServiceRole
+      LoadBalancers:
+        - 
+          ContainerPort: 80
+          ContainerName: 'petclinic-app'
+          TargetGroupArn: !Ref TargetGroup01
+      PlacementStrategies:
+            - Type: spread
+              Field: instanceId
+
+# -------------------------------------
+#           LOAD BALANCING 
+# -------------------------------------
+  # Create an ALB to use with ECS
+  Alb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties: 
+      IpAddressType: ipv4
+      Name: 'vpc01-alb'
+      Scheme: internet-facing
+      SecurityGroups: 
+        - !Ref SecurityGroup01
+      Subnets: 
+        - !Ref PubSubnetAz1
+        - !Ref PubSubnetAz2
+      Tags: 
+        - Key: Name
+          Value: 'petclinic-alb'
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref Alb
+      DefaultActions:
+        - TargetGroupArn: !Ref TargetGroup01
+          Type: forward
+      Protocol: HTTP
+      Port: 80
+
+  # Create a target group for the ALB
+  TargetGroup01:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: Alb
+    Properties:
+      VpcId: !Ref Vpc
+      Name: 'cluster01-tg'
+      TargetType: instance
+      Protocol: HTTP
+      Port: 80
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: "/"
+      HealthCheckPort: traffic-port
+      HealthCheckProtocol : HTTP
+      HealthCheckTimeoutSeconds: 10
+      UnhealthyThresholdCount: 10
+      Tags: 
+        - Key: Name
+          Value: 'petclinic-tg'
