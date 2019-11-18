@@ -1,0 +1,58 @@
+pipeline {
+    agent { 
+        label 'jenkins-agent'
+    }
+
+    environment {
+        stack_name= 'EcsStackPetclinic'
+    }
+
+    stages { 
+
+        stage('Clone Git repository') {
+            steps{
+                    git branch: 'master', url: 'git@yoko.ukrtux.com:blacksun0504/jenkins-pipelines-petclinic.git', credentialsId: 'jenkins-gitlab-key'
+            }
+        }
+
+        // stage('Validate the Cloudformation templates') {
+        //     steps {
+        //         sh script: '''
+        //         if [[ $(cfn-lint --version) ]]; 
+        //         then 
+        //             cfn-lint ${WORKSPACE}/Job3/infrastructure.yml;
+        //         else
+        //             sudo apt install python-pip -y && pip install cfn-lint &&
+        //             cfn-lint ${WORKSPACE}/Job3/infrastructure.yml;
+        //         fi
+        //         aws cloudformation validate-template --template-body file://${WORKSPACE}/Job3/infrastructure.yml
+        //         '''
+        //     }
+        // }
+        stage('Upload Cloudformation templates to S3 bucket') {
+            steps {
+                sh "aws s3 cp ${WORKSPACE}/Job3/infrastructure.yml s3://devopslabs3/cfn-templates/infrastructure.yml"
+            }
+        }
+        // stage('Create or update the Cloudformation stack') {
+        //     steps {
+        //         sh "aws cloudformation deploy --stack-name ${stack_name} --template-file https://s3.console.aws.amazon.com/s3/buckets/devopslabs3/cfn-templates/infrastructure.yml"
+        //     }
+        // }
+    }
+
+    post {
+        always {
+            echo 'The pipeline run has been finished.'  
+        }
+        success {
+            echo "Build ${BUILD_ID} is successful."
+            cleanWs() /* clean up the workspace */
+        }
+        
+        failure {
+            echo "Build ${BUILD_ID} has failed. :("
+            // cleanWs() /* clean up the workspace */
+        }
+    }
+}
