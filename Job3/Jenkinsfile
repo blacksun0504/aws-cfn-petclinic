@@ -15,19 +15,19 @@ pipeline {
             }
         }
 
-        stage('Validate the Cloudformation templates') {
+        stage('Validate the Cloudformation templates with validate-template and cfn-lint') {
             steps {
                 sh script: '''
-                if $(cfn-lint --version) > /dev/null; 
+                if $(cfn-lint --version); 
                 then 
                     echo "cfn-lint is installed."
                     cfn-lint ${WORKSPACE}/Job3/infrastructure.yml;
                 else
                     sudo apt install python-pip -y && sudo pip install cfn-lint
                     cfn-lint ${WORKSPACE}/Job3/infrastructure.yml;
-                fi
-                aws cloudformation validate-template --template-body file://${WORKSPACE}/Job3/infrastructure.yml
-                '''
+                fi'''
+                echo "Validating the template..."
+                sh "aws cloudformation validate-template --template-body file://${WORKSPACE}/Job3/infrastructure.yml"
             }
         }
         stage('Upload Cloudformation templates to S3 bucket') {
@@ -35,11 +35,11 @@ pipeline {
                 sh "aws s3 cp ${WORKSPACE}/Job3/infrastructure.yml s3://devopslabs3/cfn-templates/infrastructure.yml"
             }
         }
-        // stage('Create or update the Cloudformation stack') {
-        //     steps {
-        //         sh "aws cloudformation deploy --stack-name ${stack_name} --template-file https://s3.console.aws.amazon.com/s3/buckets/devopslabs3/cfn-templates/infrastructure.yml"
-        //     }
-        // }
+        stage('Create or update the Cloudformation stack') {
+            steps {
+                sh "aws cloudformation deploy --stack-name ${stack_name} --template-file https://devopslabs3.s3-us-west-2.amazonaws.com/cfn-templates/infrastructure.yml"
+            }
+        }
     }
 
     post {
@@ -47,8 +47,7 @@ pipeline {
             echo 'The pipeline run has been finished.'  
         }
         success {
-            echo "Build ${BUILD_ID} is successful."
-            cleanWs() /* clean up the workspace */
+            deleteDir() /* clean up the workspace */
         }
         
         failure {
