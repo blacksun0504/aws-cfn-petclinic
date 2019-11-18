@@ -5,6 +5,7 @@ pipeline {
 
     environment {
         stack_name= 'EcsStackPetclinic'
+        s3_bucket = 's3://devopslabs3/cfn-templates'
     }
 
     stages { 
@@ -32,12 +33,12 @@ pipeline {
         }
         stage('Upload Cloudformation templates to S3 bucket') {
             steps {
-                sh "aws s3 cp ${WORKSPACE}/Job3/infrastructure.yml s3://devopslabs3/cfn-templates/infrastructure.yml"
+                sh "aws s3 cp ${WORKSPACE}/Job3/infrastructure.yml ${s3_bucket}/infrastructure.yml"
             }
         }
         stage('Create or update the Cloudformation stack') {
             steps {
-                sh "aws cloudformation deploy --stack-name ${stack_name} --template-file https://devopslabs3.s3-us-west-2.amazonaws.com/cfn-templates/infrastructure.yml"
+                sh "aws cloudformation deploy --stack-name ${stack_name} --template-file https://s3.amazonaws.com/devopslabs3/cfn-templates/infrastructure.yml"
             }
         }
     }
