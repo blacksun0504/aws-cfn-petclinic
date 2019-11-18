@@ -23,8 +23,14 @@ Parameters:
     Type: String
     Description: Specifies the CIDR Block of Subnet 4
     Default: '10.10.3.0/24'
-  EcsAmiId:
+  Az1:
     Type: String
+    Default: 'us-west-2a'
+  Az2:
+    Type: String
+    Default: 'us-west-2b'
+  EcsAmiId:
+    Type: AWS::EC2::Image::Id
     Description: Specifies the AMI ID for the container instances.
     Default: 'ami-0fb71e703258ab7eb' # ECS-optimized Amazon Linux AMI 2
   EcsInstanceType:
@@ -71,7 +77,7 @@ Resources:
     Properties:
       VpcId: !Ref Vpc
       CidrBlock: !Ref SubnetCidr1
-      AvailabilityZone: 'us-west-2a'
+      AvailabilityZone: !Ref Az1
       MapPublicIpOnLaunch: true
       Tags:
       - Key: Name
@@ -81,7 +87,7 @@ Resources:
     Properties:
       VpcId: !Ref Vpc
       CidrBlock: !Ref SubnetCidr2
-      AvailabilityZone: 'us-west-2b'
+      AvailabilityZone: !Ref Az2
       MapPublicIpOnLaunch: true
       Tags:
       - Key: Name
@@ -92,7 +98,7 @@ Resources:
     Properties:
       VpcId: !Ref Vpc
       CidrBlock: !Ref SubnetCidr3
-      AvailabilityZone: 'us-west-2a'
+      AvailabilityZone: !Ref Az1
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -102,7 +108,7 @@ Resources:
     Properties:
       VpcId: !Ref Vpc
       CidrBlock: !Ref SubnetCidr4
-      AvailabilityZone: 'us-west-2b'
+      AvailabilityZone: !Ref Az2
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -200,7 +206,7 @@ Resources:
           ToPort: 8080
           CidrIp: '0.0.0.0/0'
       SecurityGroupEgress:
-        - IpProtocol: -1
+        - IpProtocol: '-1'
           FromPort: 0
           ToPort: 0
           CidrIp: '0.0.0.0/0'
@@ -221,7 +227,7 @@ Resources:
           ToPort: 65535
           SourceSecurityGroupId: !GetAtt SecurityGroup01.GroupId
       SecurityGroupEgress:
-        - IpProtocol: -1
+        - IpProtocol: '-1'
           FromPort: 0
           ToPort: 0
           CidrIp: '0.0.0.0/0'
@@ -262,9 +268,9 @@ Resources:
         - !Ref PubSubnetAz2
       TargetGroupARNs:
         - !Ref TargetGroup01
-      MinSize: 1
-      DesiredCapacity: 1
-      MaxSize: 2
+      MinSize: '1'
+      DesiredCapacity: '1'
+      MaxSize: '2'
       Tags:
         - Key: Name
           Value: 'petclinic-asg'
@@ -305,9 +311,9 @@ Resources:
           PortMappings: 
             - ContainerPort: 80
               HostPort: 0
-      Cpu: 1024
+      Cpu: '1024'
       ExecutionRoleArn: !Ref EcsTaskExecRole
-      Memory: 500
+      Memory: '500'
       NetworkMode: bridge
       Tags: 
         - Key: Name
@@ -382,3 +388,12 @@ Resources:
       Tags: 
         - Key: Name
           Value: 'petclinic-tg'
+
+Metadata:
+  cfn-lint:
+    config:
+      regions:
+      - us-west-1
+      - us-west-2
+      ignore_checks:
+      - W2
