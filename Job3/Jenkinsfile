@@ -15,20 +15,20 @@ pipeline {
             }
         }
 
-        // stage('Validate the Cloudformation templates') {
-        //     steps {
-        //         sh script: '''
-        //         if [[ $(cfn-lint --version) ]]; 
-        //         then 
-        //             cfn-lint ${WORKSPACE}/Job3/infrastructure.yml;
-        //         else
-        //             sudo apt install python-pip -y && pip install cfn-lint &&
-        //             cfn-lint ${WORKSPACE}/Job3/infrastructure.yml;
-        //         fi
-        //         aws cloudformation validate-template --template-body file://${WORKSPACE}/Job3/infrastructure.yml
-        //         '''
-        //     }
-        // }
+        stage('Validate the Cloudformation templates') {
+            steps {
+                sh script: '''
+                if [[ $(cfn-lint --version) ]]; 
+                then 
+                    cfn-lint ${WORKSPACE}/Job3/infrastructure.yml;
+                else
+                    sudo apt install python-pip -y && sudo pip install  cfn-lint &&
+                    cfn-lint ${WORKSPACE}/Job3/infrastructure.yml;
+                fi
+                aws cloudformation validate-template --template-body file://${WORKSPACE}/Job3/infrastructure.yml
+                '''
+            }
+        }
         stage('Upload Cloudformation templates to S3 bucket') {
             steps {
                 sh "aws s3 cp ${WORKSPACE}/Job3/infrastructure.yml s3://devopslabs3/cfn-templates/infrastructure.yml"
