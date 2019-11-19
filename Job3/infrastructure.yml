@@ -269,22 +269,20 @@ Resources:
       TargetGroupARNs:
         - !Ref TargetGroup01
       MinSize: '1'
-      DesiredCapacity: '1'
+      DesiredCapacity: '2'
       MaxSize: '2'
       Tags:
         - Key: Name
           Value: 'petclinic-asg'
           PropagateAtLaunch: true
 
-  AsgScalingPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties: 
-      AutoScalingGroupName: !Ref EcsInstanceAsg
-      PolicyType: TargetTrackingScaling
-      TargetTrackingConfiguration:
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ASGAverageCPUUtilization
-        TargetValue: 75
+  # AsgScalingPolicy:
+  #   Type: AWS::AutoScaling::ScalingPolicy
+  #   Properties: 
+  #     AutoScalingGroupName: !Ref EcsInstanceAsg
+  #     PolicyType: TargetTrackingScaling
+  #     TargetTrackingConfiguration:
+  #       TargetValue: 75
 
 # -------------------------------------
 #           ECS CLUSTER 
@@ -311,9 +309,8 @@ Resources:
           PortMappings: 
             - ContainerPort: 80
               HostPort: 0
-      Cpu: '1024'
       ExecutionRoleArn: !Ref EcsTaskExecRole
-      Memory: '500'
+      Memory: '250'
       NetworkMode: bridge
       Tags: 
         - Key: Name
@@ -336,9 +333,6 @@ Resources:
           ContainerPort: 80
           ContainerName: 'petclinic-app'
           TargetGroupArn: !Ref TargetGroup01
-      PlacementStrategies:
-            - Type: spread
-              Field: instanceId
 
 # -------------------------------------
 #           LOAD BALANCING 
