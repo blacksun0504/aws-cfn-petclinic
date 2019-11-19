@@ -20,8 +20,7 @@ pipeline {
             steps {
                 sh script: '''
                 if $(cfn-lint --version); 
-                then 
-                    echo "cfn-lint is installed."
+                then
                     cfn-lint ${WORKSPACE}/Job3/infrastructure.yml;
                 else
                     sudo apt install python-pip -y && sudo pip install cfn-lint
@@ -44,16 +43,8 @@ pipeline {
     }
 
     post {
-        always {
-            echo 'The pipeline run has been finished.'  
-        }
         success {
             deleteDir() /* clean up the workspace */
-        }
-        
-        failure {
-            echo "Build ${BUILD_ID} has failed. :("
-            // cleanWs() /* clean up the workspace */
         }
     }
 }
