@@ -46,5 +46,9 @@ pipeline {
         success {
             deleteDir() /* clean up the workspace */
         }
+
+        failure {
+            sh "aws cloudformation delete-stack --stack-name  ${stack_name}"
+        }
     }
 }
