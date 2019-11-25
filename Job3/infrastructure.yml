@@ -128,8 +128,7 @@ Resources:
         Statement:
         - Action: "secretsmanager:GetSecretValue"
           Effect: "Allow"
-          Principal:
-            AWS: {"arn:aws:iam::264800517173:group/AdminAccess"}
+          Principal: "arn:aws:iam::264800517173:group/AdminAccess"
           Resource: "*"
         Version: "2012-10-17"
                   
