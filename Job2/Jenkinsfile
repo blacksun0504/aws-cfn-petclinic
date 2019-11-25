@@ -7,7 +7,7 @@ pipeline {
         gitParameter name: 'TAG',
                      type: 'PT_TAG',
                      defaultValue: '2.1.53'
-                     useRepository: 'git@yoko.ukrtux.com:blacksun0504/jenkins-pipelines-petclinic.git'
+                     tagFilter: 'git@yoko.ukrtux.com:blacksun0504/jenkins-pipelines-petclinic.git/refs/tags/*'
     }
 
     environment {
