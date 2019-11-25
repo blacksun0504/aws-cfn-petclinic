@@ -125,18 +125,13 @@ Resources:
     Properties:
       SecretId: !Ref DbPasswordSecret
       ResourcePolicy:
-        Version: "2012-10-17"
         Statement:
-        - Effect: "Deny"
+        - Action: "secretsmanager:GetSecretValue"
+          Effect: "Allow"
           Principal:
-            AWS: "arn:aws:iam::264800517173:group/AdminAccess"
-          Action: "secretsmanager:DeleteSecret"
+            AWS: {"arn:aws:iam::264800517173:group/AdminAccess"}
           Resource: "*"
-        - Effect: "Allow"
-          Principal:
-            AWS: "arn:aws:iam::264800517173:group/AdminAccess"
-          Action: "secretsmanager:GetSecretValue"
-          Resource: "*"
+        Version: "2012-10-17"
                   
 # -------------------------------------
 #             NETWORKING 
