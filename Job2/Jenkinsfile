@@ -7,15 +7,16 @@ pipeline {
         gitParameter name: 'TAG',
                      type: 'PT_TAG',
                      defaultValue: '2.1.53'
-                     useRepository: 'https://yoko.ukrtux.com/blacksun0504/petclinic-project.git'
+                     useRepository: '.*petclinic-project.git'
     }
+
+
 
     environment {
         stack_name= 'EcsStackPetclinic'
     }
 
     stages { 
-
         stage('Clone Git repository') {
             steps{
                     git branch: "refs/tags/${params.TAG}", url: 'git@yoko.ukrtux.com:blacksun0504/petclinic-project.git', credentialsId: 'jenkins-gitlab-key'
