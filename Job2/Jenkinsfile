@@ -8,7 +8,6 @@ pipeline {
                      tagFilter: 'origin/master',
                      type: 'PT_TAG',
                      defaultValue: '2.1.53'
-                     useRepository: '.*petclinic-project.git'
     }
 
 
