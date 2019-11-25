@@ -3,16 +3,17 @@ pipeline {
         label 'jenkins-agent'
     }
 
+    parameters {
+        gitParameter {
+                // tagFilter: 'origin/(.*)', defaultValue: '2.1.53', name: 'TAG', type: 'PT_TAG'
+            gitParameter name: 'TAG',
+            type: 'PT_TAG',
+            defaultValue: 'master'
+        }
+    }
+
     environment {
         stack_name= 'EcsStackPetclinic'
-        parameters {
-            gitParameter {
-                // tagFilter: 'origin/(.*)', defaultValue: '2.1.53', name: 'TAG', type: 'PT_TAG'
-                gitParameter name: 'TAG',
-                type: 'PT_TAG',
-                defaultValue: 'master'
-            }
-        }
     }
 
     stages { 
