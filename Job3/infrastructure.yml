@@ -125,12 +125,14 @@ Resources:
     Properties:
       SecretId: !Ref DbPasswordSecret
       ResourcePolicy:
+        Version: '2012-10-17'
         Statement:
-        - Action: "secretsmanager:GetSecretValue"
-          Effect: "Allow"
-          Principal: "arn:aws:iam::264800517173:group/AdminAccess"
-          Resource: "*"
-        Version: "2012-10-17"
+          - Action: secretsmanager:GetSecretValue
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:group/AdminAccess'
+            Resource: '*'
+     
                   
 # -------------------------------------
 #             NETWORKING 
