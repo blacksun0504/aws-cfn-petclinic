@@ -7,7 +7,7 @@ pipeline {
         stack_name= 'EcsStackPetclinic'
         parameters {
             gitParameter {
-                tagFilter: 'refs/tags/(.*)', defaultValue: '2.1.53', name: 'TAG', type: 'PT_TAG'
+                tagFilter: 'origin/(.*)', defaultValue: '2.1.53', name: 'TAG', type: 'PT_TAG'
             }
         }
     }
