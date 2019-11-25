@@ -10,18 +10,35 @@ pipeline {
                      defaultValue: '2.1.53'
     }
 
-
-
     environment {
         stack_name= 'EcsStackPetclinic'
     }
 
     stages { 
-        stage('Clone Git repository') {
+        stage('PollSCM') {
+            steps {
+                checkout([$class: 'GitSCM', branches: [[name: 'master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: 'gitlab-credentials', url: 'https://yoko.ukrtux.com/blacksun0504/petclinic-project.git']]])
+                script {
+                        tags = sh(script: "git tag --sort=v:refname | tail -5 ", returnStdout: true).trim()
+                    }
+            }
+        }
+
+        stage('CHOICE TAG') {
+            steps {
+                script {
+                    def tag_response = input message: 'Select a version:',
+                    parameters: [choice(choices: "${tags}",  description: 'blah', name: '')]
+                    env.tag_response = tag_response
+                }
+            }
+        }
+
+       /* stage('Clone Git repository') {
             steps{
                     git branch: "refs/tags/${params.TAG}", url: 'git@yoko.ukrtux.com:blacksun0504/petclinic-project.git', credentialsId: 'jenkins-gitlab-key'
             }
-        }
+        } */
 
         stage('Create or update the Cloudformation stack') {
             steps {
