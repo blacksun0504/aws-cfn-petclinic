@@ -5,8 +5,7 @@ pipeline {
 
     parameters {
         gitParameter {
-                // tagFilter: 'origin/(.*)', defaultValue: '2.1.53', name: 'TAG', type: 'PT_TAG'
-            gitParameter name: 'TAG',
+            name: 'TAG',
             type: 'PT_TAG',
             defaultValue: 'master'
         }
