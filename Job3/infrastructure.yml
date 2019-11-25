@@ -78,15 +78,15 @@ Parameters:
     ConstraintDescription: must begin with a letter and contain only alphanumeric
       characters.
     Default: root
-  # DBPassword:
-  #   NoEcho: 'true'
-  #   Description: The database admin account password
-  #   Type: String
-  #   MinLength: '1'
-  #   MaxLength: '41'
-  #   AllowedPattern: '[a-zA-Z0-9]+'
-  #   ConstraintDescription: must contain only alphanumeric characters.
-  #   Default: petclinic
+  DBPassword:
+    NoEcho: 'true'
+    Description: The database admin account password
+    Type: String
+    MinLength: '1'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z0-9]+'
+    ConstraintDescription: must contain only alphanumeric characters.
+    Default: petclinic
   DBAllocatedStorage:
     Default: '5'
     Description: The size of the database (Gb)
@@ -98,40 +98,40 @@ Parameters:
 
 
 Resources:
-# Create a secret to store root password for RDS (used for ECS task definition)
-  DbPasswordSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties: 
-      Description: Root password for RDS
-      GenerateSecretString: 
-        PasswordLength: 10
-        ExcludePunctuation: true
-        IncludeSpace: false
-        GenerateStringKey: password
-        SecretStringTemplate: !Join ['', ['{"username": "', !Ref DBUser, '"}']]
-      Name: RDS-password
-      Tags: 
-        - Key: Name
-          Value: rds-root-pw
-  SecretAttachment:
-    Type: AWS::SecretsManager::SecretTargetAttachment
-    Properties: 
-      SecretId: !Ref DbPasswordSecret
-      TargetId: !Ref MasterDB
-      TargetType: AWS::RDS::DBInstance
+# # Create a secret to store root password for RDS (used for ECS task definition)
+#   DbPasswordSecret:
+#     Type: AWS::SecretsManager::Secret
+#     Properties: 
+#       Description: Root password for RDS
+#       GenerateSecretString: 
+#         PasswordLength: 10
+#         ExcludePunctuation: true
+#         IncludeSpace: false
+#         GenerateStringKey: password
+#         SecretStringTemplate: !Join ['', ['{"username": "', !Ref DBUser, '"}']]
+#       Name: RDS-password
+#       Tags: 
+#         - Key: Name
+#           Value: rds-root-pw
+#   SecretAttachment:
+#     Type: AWS::SecretsManager::SecretTargetAttachment
+#     Properties: 
+#       SecretId: !Ref DbPasswordSecret
+#       TargetId: !Ref MasterDB
+#       TargetType: AWS::RDS::DBInstance
 
-  SecretResourcePolicy:
-    Type: AWS::SecretsManager::ResourcePolicy
-    Properties:
-      SecretId: !Ref DbPasswordSecret
-      ResourcePolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Action: secretsmanager:GetSecretValue
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:group/AdminAccess'
-            Resource: '*'
+#   SecretResourcePolicy:
+#     Type: AWS::SecretsManager::ResourcePolicy
+#     Properties:
+#       SecretId: !Ref DbPasswordSecret
+#       ResourcePolicy:
+#         Version: '2012-10-17'
+#         Statement:
+#           - Action: secretsmanager:GetSecretValue
+#             Effect: Allow
+#             Principal:
+#               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:group/AdminAccess'
+#             Resource: '*'
      
                   
 # -------------------------------------
@@ -430,15 +430,15 @@ Resources:
             -
               Name: spring.datasource.username
               Value: !Ref DBUser
-            # -
-              # Name: spring.datasource.password
-              # Value: !Ref DBPassword
+            -
+              Name: spring.datasource.password
+              Value: !Ref DBPassword
             -
               Name: spring.datasource.initialize
               Value: 'true'
-          Secrets:
-            - Name: spring.datasource.password
-              ValueFrom: !Ref DbPasswordSecret
+          # Secrets:
+          #   - Name: spring.datasource.password
+          #     ValueFrom: !Ref DbPasswordSecret
       Tags: 
         - Key: Name
           Value: !Sub ${AppName}-taskdef
@@ -525,8 +525,8 @@ Resources:
       DBInstanceClass: db.t2.micro
       Engine: !Ref RdsEngine
       MasterUsername: !Ref DBUser
-      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DbPasswordSecret, ':SecretString:password}}' ]]
-      # MasterUserPassword: !Ref DBPassword
+      # MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DbPasswordSecret, ':SecretString:password}}' ]]
+      MasterUserPassword: !Ref DBPassword
       MultiAZ: false
       Tags:
       - Key: Name
@@ -534,16 +534,6 @@ Resources:
       VPCSecurityGroups: [ !GetAtt SecurityGroup03.GroupId ]
       BackupRetentionPeriod: 2
     DeletionPolicy: Snapshot
-
-  # ReplicaDB:
-  #   Type: AWS::RDS::DBInstance
-  #   Properties:
-  #     SourceDBInstanceIdentifier: !Ref MasterDB
-  #     DBInstanceClass: db.t2.micro
-  #     Tags:
-  #     - Key: Name
-  #       Value: petclinic-replica
-
 
 # -------------------------------------
 #             CLOUDWATCH
@@ -582,10 +572,6 @@ Outputs:
     Description: JDBC connection string for the master database
     Value: !Join ['', ['jdbc:mysql://', !GetAtt [MasterDB, Endpoint.Address], ':',
         !GetAtt [MasterDB, Endpoint.Port], /, !Ref 'DBName']]
-  # ReplicaJDBCConnectionString:
-  #   Description: JDBC connection string for the replica database
-  #   Value: !Join ['', ['jdbc:mysql://', !GetAtt [ReplicaDB, Endpoint.Address], ':',
-  #       !GetAtt [ReplicaDB, Endpoint.Port], /, !Ref 'DBName']]
 
   LoadBalancerUrl:
     Description: URL of the ALB in from of the ECS cluster
