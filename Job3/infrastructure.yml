@@ -38,10 +38,9 @@ Parameters:
     Description: >
       Specifies the EC2 instance type for the container instances.
     Default: t2.micro
-    ConstraintDescription: must be a valid EC2 instance type.
   EcsTaskCount:
     Type: Number
-    Default: 2
+    Default: 4
   EcsServiceRole:
     Type: String
     Default: 'arn:aws:iam::264800517173:role/aws-service-role/ecs.amazonaws.com/AWSServiceRoleForECS'
@@ -51,14 +50,94 @@ Parameters:
   EcsTaskExecRole:
     Type: String
     Default: 'arn:aws:iam::264800517173:role/ecsTaskExecutionRole'
-  # EcsContainerPort:
-  #   Type: Number
-  #   Default: 80
+  EcsDockerImage:
+    Type: String
+    Default: '264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic:2.1.53'
+  EcsContainerPort:
+    Type: Number
+    Default: 80
   KeyName:
     Type: String
     Default: DevopsLabKeys
- 
+  AppName:
+    Type: String
+    Default: petclinic
+  RdsEngine:
+    Type: String
+    Default: mysql
+  DBName:
+    Default: petclinic
+    Type: String
+  DBUser:
+    NoEcho: 'true'
+    Description: The database admin account username
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric
+      characters.
+    Default: root
+  # DBPassword:
+  #   NoEcho: 'true'
+  #   Description: The database admin account password
+  #   Type: String
+  #   MinLength: '1'
+  #   MaxLength: '41'
+  #   AllowedPattern: '[a-zA-Z0-9]+'
+  #   ConstraintDescription: must contain only alphanumeric characters.
+  #   Default: petclinic
+  DBAllocatedStorage:
+    Default: '5'
+    Description: The size of the database (Gb)
+    Type: Number
+    MinValue: '5'
+    MaxValue: '1024'
+    ConstraintDescription: must be between 5 and 1024Gb.
+
+
+
 Resources:
+# Create a secret to store root password for RDS (used for ECS task definition)
+  DbPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties: 
+      Description: Root password for RDS
+      GenerateSecretString: 
+        PasswordLength: 10
+        ExcludePunctuation: true
+        IncludeSpace: false
+        GenerateStringKey: password
+        SecretStringTemplate: !Join ['', ['{"username": "', !Ref DBUser, '"}']]
+      Name: RDS-password
+      Tags: 
+        - Key: Name
+          Value: rds-root-pw
+  SecretAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties: 
+      SecretId: !Ref DbPasswordSecret
+      TargetId: !Ref MasterDB
+      TargetType: AWS::RDS::DBInstance
+
+  SecretResourcePolicy:
+    Type: AWS::SecretsManager::ResourcePolicy
+    Properties:
+      SecretId: !Ref DbPasswordSecret
+      ResourcePolicy:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: "Deny"
+          Principal:
+            AWS: "arn:aws:iam::264800517173:group/AdminAccess"
+          Action: "secretsmanager:DeleteSecret"
+          Resource: "*"
+        - Effect: "Allow"
+          Principal:
+            AWS: "arn:aws:iam::264800517173:group/AdminAccess"
+          Action: "secretsmanager:GetSecretValue"
+          Resource: "*"
+                  
 # -------------------------------------
 #             NETWORKING 
 # -------------------------------------
@@ -71,6 +150,7 @@ Resources:
       Tags:
         - Key: Name
           Value: vpc01
+
   # Create two public subnets in different AZ
   PubSubnetAz1:
     Type: AWS::EC2::Subnet
@@ -82,6 +162,7 @@ Resources:
       Tags:
       - Key: Name
         Value: vpc01-pub01
+
   PubSubnetAz2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -92,6 +173,7 @@ Resources:
       Tags:
       - Key: Name
         Value: 'vpc01-pub02'
+
   # Create two private subnets in different AZ
   PrivSubnetAz1:
     Type: AWS::EC2::Subnet
@@ -103,6 +185,7 @@ Resources:
       Tags:
         - Key: Name
           Value: 'vpc01-priv01'
+
   PrivSubnetAz2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -113,6 +196,7 @@ Resources:
       Tags:
         - Key: Name
           Value: 'vpc01-priv02'
+
   # Create internet gateway and attach it to VPC
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -125,6 +209,7 @@ Resources:
     Properties:
       VpcId: !Ref Vpc
       InternetGatewayId: !Ref InternetGateway
+
   # Create a routing table for public subnets with internet gateway
   RouteViaIgw:
     Type: AWS::EC2::RouteTable
@@ -137,6 +222,7 @@ Resources:
       RouteTableId: !Ref RouteViaIgw
       DestinationCidrBlock: '0.0.0.0/0'
       GatewayId: !Ref InternetGateway
+
   # Associate routing table 1 with public subnets
   PubSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -148,6 +234,7 @@ Resources:
     Properties:
       SubnetId: !Ref PubSubnetAz2
       RouteTableId: !Ref RouteViaIgw
+
   # Create a NAT gateway with EIP to provide internet access for private subnets
   NatEip:
     Type: AWS::EC2::EIP
@@ -156,6 +243,7 @@ Resources:
     Properties:
       SubnetId: !Ref PubSubnetAz1
       AllocationId: !GetAtt NatEip.AllocationId
+
   # Create a routing table for public subnets with NAT gateway attachment
   RouteViaNat:
     Type: AWS::EC2::RouteTable
@@ -167,6 +255,7 @@ Resources:
       RouteTableId: !Ref RouteViaNat
       DestinationCidrBlock: '0.0.0.0/0'
       NatGatewayId: !Ref NatGateway
+
   # Associate routing table 2 with private subnets
   PrivSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -178,6 +267,18 @@ Resources:
     Properties:
       SubnetId: !Ref PrivSubnetAz2
       RouteTableId: !Ref RouteViaNat
+  
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties: 
+      DBSubnetGroupDescription: description
+      SubnetIds: 
+        - !Ref PrivSubnetAz1
+        - !Ref PrivSubnetAz2
+      Tags: 
+        - 
+          Key: Name
+          Value: 'vpc01-subnetgroup'
 
 # -------------------------------------
 #          SECURITY GROUPS 
@@ -190,20 +291,13 @@ Resources:
       GroupName: 'vpc01: public access'
       VpcId: !Ref Vpc
       SecurityGroupIngress:
-        - 
-          IpProtocol: tcp
+        - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: '0.0.0.0/0'
-        - 
-          IpProtocol: tcp
+        - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: '0.0.0.0/0'
-        - 
-          IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
           CidrIp: '0.0.0.0/0'
       SecurityGroupEgress:
         - IpProtocol: '-1'
@@ -226,6 +320,10 @@ Resources:
           FromPort: 0
           ToPort: 65535
           SourceSecurityGroupId: !GetAtt SecurityGroup01.GroupId
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: '0.0.0.0/0'
       SecurityGroupEgress:
         - IpProtocol: '-1'
           FromPort: 0
@@ -234,6 +332,27 @@ Resources:
       Tags: 
         - Key: Name
           Value: 'vpc01-sg02'
+
+  # Create a security group for allowing traffic from ECS instances to RDS on port 3306
+  SecurityGroup03:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: 'Allow traffic from the ECS instances to RDS on port 3306.'
+      GroupName: 'vpc01: db access'
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !GetAtt SecurityGroup02.GroupId
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          FromPort: 0
+          ToPort: 0
+          CidrIp: '0.0.0.0/0'
+      Tags: 
+        - Key: Name
+          Value: 'vpc01-sg03'
 
 # -------------------------------------
 #             AUTOSCALING 
@@ -259,7 +378,7 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn: AttachGateway
     Properties:
-      AutoScalingGroupName: petclinic-asg
+      AutoScalingGroupName: !Sub ${AppName}-asg
       LaunchConfigurationName: !Ref EcsInstanceLc
       HealthCheckGracePeriod: 300
       HealthCheckType: EC2
@@ -273,16 +392,8 @@ Resources:
       MaxSize: '2'
       Tags:
         - Key: Name
-          Value: 'petclinic-asg'
+          Value: !Sub ${AppName}-asg
           PropagateAtLaunch: true
-
-  # AsgScalingPolicy:
-  #   Type: AWS::AutoScaling::ScalingPolicy
-  #   Properties: 
-  #     AutoScalingGroupName: !Ref EcsInstanceAsg
-  #     PolicyType: TargetTrackingScaling
-  #     TargetTrackingConfiguration:
-  #       TargetValue: 75
 
 # -------------------------------------
 #           ECS CLUSTER 
@@ -294,34 +405,54 @@ Resources:
       ClusterName: 'cluster01'
       Tags: 
         - Key: Name
-          Value: 'petclinic-cluster'
+          Value: !Sub ${AppName}-cluster
 
   # Create a task definition for the Petclinic service
   EscTaskDef:
     Type: AWS::ECS::TaskDefinition
     Properties: 
-      Family: petclinic_taskdef01
+      Family: !Sub ${AppName}-taskdef01
       RequiresCompatibilities:
-        - "EC2"
-      ContainerDefinitions: 
-        - Name: 'petclinic-app'
-          Image: 'tutum/hello-world'
-          PortMappings: 
-            - ContainerPort: 80
-              HostPort: 0
+        - 'EC2'
       ExecutionRoleArn: !Ref EcsTaskExecRole
-      Memory: '250'
+      Memory: '400'
       NetworkMode: bridge
+      ContainerDefinitions: 
+        - Name: !Ref AppName
+          Image: !Ref EcsDockerImage
+          Cpu: 256
+          PortMappings: 
+            - ContainerPort: !Ref EcsContainerPort
+              HostPort: 0
+          Environment:
+            -
+              Name: spring.profiles.active
+              Value: mysql
+            -
+              Name: spring.datasource.url
+              Value: !Join ['', ['jdbc:mysql://', !GetAtt [MasterDB, Endpoint.Address], ':', !GetAtt [MasterDB, Endpoint.Port], /, !Ref 'DBName']]
+            -
+              Name: spring.datasource.username
+              Value: !Ref DBUser
+            # -
+              # Name: spring.datasource.password
+              # Value: !Ref DBPassword
+            -
+              Name: spring.datasource.initialize
+              Value: 'true'
+          Secrets:
+            - Name: spring.datasource.password
+              ValueFrom: !Ref DbPasswordSecret
       Tags: 
         - Key: Name
-          Value: 'petclinic-taskdef'
+          Value: !Sub ${AppName}-taskdef
 
   # Create an ECS service based on the task defition created earlier
   EcsService:
     Type: AWS::ECS::Service
     DependsOn: HttpListener
     Properties: 
-      ServiceName: 'srv01-petclinic'
+      ServiceName: !Sub srv01-${AppName}
       Cluster: !Ref EcsCluster
       TaskDefinition: !Ref EscTaskDef
       DesiredCount: !Ref EcsTaskCount
@@ -331,8 +462,11 @@ Resources:
       LoadBalancers:
         - 
           ContainerPort: 80
-          ContainerName: 'petclinic-app'
+          ContainerName: !Ref AppName
           TargetGroupArn: !Ref TargetGroup01
+      DeploymentConfiguration:
+        MaximumPercent: 150
+        MinimumHealthyPercent: 100
 
 # -------------------------------------
 #           LOAD BALANCING 
@@ -351,7 +485,7 @@ Resources:
         - !Ref PubSubnetAz2
       Tags: 
         - Key: Name
-          Value: 'petclinic-alb'
+          Value: !Sub ${AppName}-alb
 
   HttpListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -381,7 +515,85 @@ Resources:
       UnhealthyThresholdCount: 10
       Tags: 
         - Key: Name
-          Value: 'petclinic-tg'
+          Value: !Sub ${AppName}-tg
+
+# -------------------------------------
+#                 RDS 
+# -------------------------------------
+  MasterDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Ref DBName
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      AllocatedStorage: !Ref DBAllocatedStorage
+      DBInstanceClass: db.t2.micro
+      Engine: !Ref RdsEngine
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DbPasswordSecret, ':SecretString:password}}' ]]
+      # MasterUserPassword: !Ref DBPassword
+      MultiAZ: false
+      Tags:
+      - Key: Name
+        Value: petclinic-master
+      VPCSecurityGroups: [ !GetAtt SecurityGroup03.GroupId ]
+      BackupRetentionPeriod: 2
+    DeletionPolicy: Snapshot
+
+  # ReplicaDB:
+  #   Type: AWS::RDS::DBInstance
+  #   Properties:
+  #     SourceDBInstanceIdentifier: !Ref MasterDB
+  #     DBInstanceClass: db.t2.micro
+  #     Tags:
+  #     - Key: Name
+  #       Value: petclinic-replica
+
+
+# -------------------------------------
+#             CLOUDWATCH
+# -------------------------------------
+  ALBRequestsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Requests to ALB
+      AlarmName: !Sub ${AppName}-high-requests-count
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      MetricName: RequestCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Sum
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            !GetAtt Alb.LoadBalancerFullName
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 10
+      TreatMissingData: missing
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  AlarmTopic:
+      Type: "AWS::SNS::Topic"
+      Properties:
+        TopicName: !Sub ${AppName}-requests-count-alert
+        Subscription:
+          - Protocol: email
+            Endpoint: liquid92@gmail.com
+
+
+Outputs:
+  MasterJDBCConnectionString:
+    Description: JDBC connection string for the master database
+    Value: !Join ['', ['jdbc:mysql://', !GetAtt [MasterDB, Endpoint.Address], ':',
+        !GetAtt [MasterDB, Endpoint.Port], /, !Ref 'DBName']]
+  # ReplicaJDBCConnectionString:
+  #   Description: JDBC connection string for the replica database
+  #   Value: !Join ['', ['jdbc:mysql://', !GetAtt [ReplicaDB, Endpoint.Address], ':',
+  #       !GetAtt [ReplicaDB, Endpoint.Port], /, !Ref 'DBName']]
+
+  LoadBalancerUrl:
+    Description: URL of the ALB in from of the ECS cluster
+    Value: !Join ['', ['http://', !GetAtt Alb.DNSName ]]
 
 Metadata:
   cfn-lint:
