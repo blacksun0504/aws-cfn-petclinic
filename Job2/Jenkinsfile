@@ -3,12 +3,12 @@ pipeline {
         label 'jenkins-agent'
     }
 
-    parameters {
+    /*parameters {
         gitParameter name: 'TAG',
                      tagFilter: 'origin/master',
                      type: 'PT_TAG',
                      defaultValue: '2.1.53'
-    }
+    }*/
 
     environment {
         stack_name= 'EcsStackPetclinic'
@@ -28,21 +28,24 @@ pipeline {
             steps {
                 script {
                     def tag_response = input message: 'Select a version:',
-                    parameters: [choice(choices: "${tags}",  description: 'blah', name: '')]
+                    parameters: [choice(choices: "${tags}",  description: 'Select a version to build', name: '')]
                     env.tag_response = tag_response
                 }
             }
         }
 
-       /* stage('Clone Git repository') {
-            steps{
-                    git branch: "refs/tags/${params.TAG}", url: 'git@yoko.ukrtux.com:blacksun0504/petclinic-project.git', credentialsId: 'jenkins-gitlab-key'
+        stage('Clone Git repository with cfn templates') {
+            steps {
+                git branch: 'master', url: 'git@yoko.ukrtux.com:blacksun0504/jenkins-pipelines-petclinic.git', credentialsId: 'jenkins-gitlab-key'
             }
-        } */
+        }
 
         stage('Create or update the Cloudformation stack') {
             steps {
-                echo "Selected version ${params.TAG} to build."
+                echo "Selected version ${env.tag_response} to build."
+                sh "aws cloudformation deploy --stack-name ${stack_name} --template-file ${WORKSPACE}/Job3/infrastructure.yml \
+                    --parameter-overrides EcsDockerImage=264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic:${env.tag_response}"
+
             }
         }
     }
