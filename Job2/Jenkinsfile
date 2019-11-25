@@ -7,6 +7,7 @@ pipeline {
         gitParameter name: 'TAG',
                      type: 'PT_TAG',
                      defaultValue: '2.1.53'
+                     useRepository: 'https://yoko.ukrtux.com/blacksun0504/petclinic-project.git'
     }
 
     environment {
