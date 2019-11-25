@@ -461,8 +461,8 @@ Resources:
           ContainerName: !Ref AppName
           TargetGroupArn: !Ref TargetGroup01
       DeploymentConfiguration:
-        MaximumPercent: 150
-        MinimumHealthyPercent: 100
+        MaximumPercent: 100
+        MinimumHealthyPercent: 50
 
 # -------------------------------------
 #           LOAD BALANCING 
