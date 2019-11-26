@@ -3,13 +3,6 @@ pipeline {
         label 'jenkins-agent'
     }
 
-    /*parameters {
-        gitParameter name: 'TAG',
-                     tagFilter: 'origin/master',
-                     type: 'PT_TAG',
-                     defaultValue: '2.1.53'
-    }*/
-
     environment {
         stack_name= 'EcsStackPetclinic'
     }
@@ -24,11 +17,11 @@ pipeline {
             }
         }
 
-        stage('CHOICE TAG') {
+        stage('Select TAG as a parameter') {
             steps {
                 script {
                     def tag_response = input message: 'Select a version:',
-                    parameters: [choice(choices: "${tags}",  description: 'Select a version to build', name: '')]
+                    parameters: [choice(choices: "${tags}",  description: 'Select an application version for deployment.', name: '')]
                     env.tag_response = tag_response
                 }
             }
@@ -42,7 +35,7 @@ pipeline {
 
         stage('Create or update the Cloudformation stack') {
             steps {
-                echo "Selected version ${env.tag_response} to build."
+                echo "Selected version ${env.tag_response} to deploy."
                 sh "aws cloudformation deploy --stack-name ${stack_name} --template-file ${WORKSPACE}/Job3/infrastructure.yml \
                     --parameter-overrides EcsDockerImage=264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic:${env.tag_response}"
 
