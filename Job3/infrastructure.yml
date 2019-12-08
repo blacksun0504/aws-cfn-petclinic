@@ -38,6 +38,15 @@ Parameters:
     Description: >
       Specifies the EC2 instance type for the container instances.
     Default: t2.micro
+  AsgMinSize:
+    Type: String
+    Default: '2'
+  AsgMaxSize:
+    Type: String
+    Default: '3'
+  AsgDesiredSize:
+    Type: String
+    Default: '2'
   EcsTaskCount:
     Type: Number
     Default: 4
@@ -47,12 +56,21 @@ Parameters:
   EcsInstanceProfile:
     Type: String
     Default: 'arn:aws:iam::264800517173:instance-profile/ecsInstanceRole'
-  EcsTaskExecRole:
+  CustomEcsInstancePolicy:
     Type: String
-    Default: 'arn:aws:iam::264800517173:role/ecsTaskExecutionRole'
+    Default: 'arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role'
+  EcsTaskExecPolicy:
+    Type: String
+    Default: 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+  EcsAutoscalingRole:
+    Type: String
+    Default: 'arn:aws:iam::264800517173:role/ecsAutoscaleRole'
   EcsDockerImage:
     Type: String
     Default: '264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic:2.1.53'
+  CloudWatchLogsPolicy:
+    Type: String
+    Default: 'arn:aws:iam::264800517173:policy/CloudwatchLogsAgentPolicy'
   EcsContainerPort:
     Type: Number
     Default: 80
@@ -95,45 +113,45 @@ Parameters:
     MaxValue: '1024'
     ConstraintDescription: must be between 5 and 1024Gb.
 
-
-
 Resources:
-# # Create a secret to store root password for RDS (used for ECS task definition)
-#   DbPasswordSecret:
-#     Type: AWS::SecretsManager::Secret
-#     Properties: 
-#       Description: Root password for RDS
-#       GenerateSecretString: 
-#         PasswordLength: 10
-#         ExcludePunctuation: true
-#         IncludeSpace: false
-#         GenerateStringKey: password
-#         SecretStringTemplate: !Join ['', ['{"username": "', !Ref DBUser, '"}']]
-#       Name: RDS-password
-#       Tags: 
-#         - Key: Name
-#           Value: rds-root-pw
-#   SecretAttachment:
-#     Type: AWS::SecretsManager::SecretTargetAttachment
-#     Properties: 
-#       SecretId: !Ref DbPasswordSecret
-#       TargetId: !Ref MasterDB
-#       TargetType: AWS::RDS::DBInstance
+  # Create a secret to store root password for RDS (used for ECS task definition)
+  DbPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties: 
+      Description: Root password for RDS
+      GenerateSecretString: 
+        PasswordLength: 10
+        ExcludePunctuation: true
+        IncludeSpace: false
+        GenerateStringKey: password
+        SecretStringTemplate: !Join ['', ['{"username": "', !Ref DBUser, '"}']]
+      Name: RDS_CREDENTIALS
 
-#   SecretResourcePolicy:
-#     Type: AWS::SecretsManager::ResourcePolicy
-#     Properties:
-#       SecretId: !Ref DbPasswordSecret
-#       ResourcePolicy:
-#         Version: '2012-10-17'
-#         Statement:
-#           - Action: secretsmanager:GetSecretValue
-#             Effect: Allow
-#             Principal:
-#               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:group/AdminAccess'
-#             Resource: '*'
-     
-                  
+  SecretAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties: 
+      SecretId: !Ref DbPasswordSecret
+      TargetId: !Ref MasterDB
+      TargetType: AWS::RDS::DBInstance
+
+  # ResourcePolicy:
+  #   Type: AWS::SecretsManager::ResourcePolicy
+  #   Properties:
+  #     SecretId: !Ref DbPasswordSecret
+  #     ResourcePolicy:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: "Allow"
+  #           Action: "secretsmanager:GetSecretValue"
+  #           Resource: "*"
+  #           Principal: 
+  #             AWS: !Sub "arn:aws:iam::${AWS::AccountId}:user/*"
+  #         - Effect: "Allow"
+  #           Action: "secretsmanager:GetSecretValue"
+  #           Resource: "*"
+  #           Principal: 
+  #             AWS: !Sub "arn:aws:iam::${AWS::AccountId}:role/*"
+
 # -------------------------------------
 #             NETWORKING 
 # -------------------------------------
@@ -211,6 +229,7 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref Vpc
+
   PublicRouteViaIgw:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
@@ -225,6 +244,7 @@ Resources:
     Properties:
       SubnetId: !Ref PubSubnetAz1
       RouteTableId: !Ref RouteViaIgw
+
   PubSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -234,6 +254,7 @@ Resources:
   # Create a NAT gateway with EIP to provide internet access for private subnets
   NatEip:
     Type: AWS::EC2::EIP
+
   NatGateway:
     Type: AWS::EC2::NatGateway
     Properties:
@@ -245,6 +266,7 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref Vpc
+
   PrivateRouteViaNat:
     Type: AWS::EC2::Route
     Properties:
@@ -258,6 +280,7 @@ Resources:
     Properties:
       SubnetId: !Ref PrivSubnetAz1
       RouteTableId: !Ref RouteViaNat
+
   PrivSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -350,6 +373,77 @@ Resources:
         - Key: Name
           Value: 'vpc01-sg03'
 
+
+# -------------------------------------
+#                 IAM 
+# -------------------------------------
+  CustomEcsTaskExecRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ecs-tasks.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - !Ref EcsTaskExecPolicy
+      Policies:
+        - PolicyName: SecretsReadPolicy
+          PolicyDocument: {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": [
+                        "secretsmanager:GetSecretValue"
+                    ],
+                    "Effect": "Allow",
+                    "Resource": "*"
+                }
+              ]
+            }
+    
+  CustomEcsInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - !Ref CustomEcsInstancePolicy
+      Policies:
+        - PolicyName: SecretsReadPolicy
+          PolicyDocument: {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": [
+                        "logs:CreateLogGroup",
+                        "logs:CreateLogStream"
+                    ],
+                    "Effect": "Allow",
+                    "Resource": "*"
+                }
+              ]
+            }
+  
+  CustomEcsInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      InstanceProfileName: CustomEcsInstanceProfile
+      Path: "/"
+      Roles: 
+        - !Ref CustomEcsInstanceRole
+
 # -------------------------------------
 #             AUTOSCALING 
 # -------------------------------------
@@ -360,7 +454,7 @@ Resources:
       ImageId: !Ref EcsAmiId
       InstanceType: !Ref EcsInstanceType
       AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref EcsInstanceProfile
+      IamInstanceProfile: !Ref CustomEcsInstanceProfile
       KeyName: !Ref KeyName
       SecurityGroups: [ !Ref SecurityGroup02 ]
       PlacementTenancy: default
@@ -368,6 +462,23 @@ Resources:
         Fn::Base64: !Sub |
           #!/bin/bash
           echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config
+          yum update -y
+          yum install -y aws-cfn-bootstrap aws-cli awslogs 
+          EC2_INSTANCE_ID=$(curl http://169.254.169.254/latest/meta-data/instance-id)
+          REGION=$(curl 169.254.169.254/latest/meta-data/placement/availability-zone | sed s'/.$//')
+          cat > /etc/awslogs/awslogs.conf << EOF
+          [general]
+          state_file = /var/lib/awslogs/agent-state
+          [/var/log/ecs/ecs-agent.log]
+          datetime_format = %b %d %H:%M:%S
+          file = /var/log/ecs/ecs-agent.log*
+          log_group_name = EcsAgentLogs
+          log_stream_name = ${EcsCluster}/${AppName}/$EC2_INSTANCE_ID
+          EOF
+          # Set the region to send CloudWatch Logs data to (the region where the container instance is located)
+          sed -i -e "s/region = us-east-1/region = $REGION/g" /etc/awslogs/awscli.conf
+          sudo systemctl start awslogsd
+          aws logs put-retention-policy --log-group-name EcsAgentLogs --retention-in-days 1
 
   # Create an ASG for the ECS cluster
   EcsInstanceAsg:
@@ -383,13 +494,84 @@ Resources:
         - !Ref PubSubnetAz2
       TargetGroupARNs:
         - !Ref TargetGroup01
-      MinSize: '1'
-      DesiredCapacity: '2'
-      MaxSize: '2'
+      MinSize: !Ref AsgMinSize
+      DesiredCapacity: !Ref AsgDesiredSize
+      MaxSize: !Ref AsgMaxSize
       Tags:
         - Key: Name
           Value: !Sub ${AppName}-asg
           PropagateAtLaunch: true
+
+  # Create a cluster scale-out policy based on memory reservation
+  EcsClusterScaleOutPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref EcsInstanceAsg
+      AdjustmentType: ChangeInCapacity
+      PolicyType: SimpleScaling
+      ScalingAdjustment: 1
+      Cooldown: '60'
+
+  # Create a scale-in policy based on memory reservation
+  EcsClusterScaleInPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref EcsInstanceAsg
+      AdjustmentType: ChangeInCapacity
+      PolicyType: SimpleScaling
+      ScalingAdjustment: -1
+      Cooldown: '60'
+
+  # Create a scalable target for the ECS service
+  ServiceScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 9
+      MinCapacity: 4
+      ResourceId: !Join ['', [service/, !Ref EcsCluster, /, !GetAtt [EcsService, Name]]]
+      RoleARN: !Ref EcsAutoscalingRole
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+ 
+  # Create a service scale-out policy based on ALB requests count
+  EcsServiceScaleOutPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: EcsServiceScaleOutPolicy
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        Cooldown: 60
+        MetricAggregationType: Average
+        StepAdjustments:
+          - 
+            ScalingAdjustment: 1
+            MetricIntervalLowerBound: 0
+            MetricIntervalUpperBound: 100
+          - 
+            ScalingAdjustment: 2
+            MetricIntervalLowerBound: 100
+            MetricIntervalUpperBound: 200
+          - 
+            ScalingAdjustment: 3
+            MetricIntervalLowerBound: 200
+
+  # Create a scale-in policy based on ALB requests count
+  EcsServiceScaleInPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: EcsServiceScaleInPolicy
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        Cooldown: 30
+        MetricAggregationType: Average
+        StepAdjustments:
+          - 
+            ScalingAdjustment: -1
+            MetricIntervalUpperBound: 0
 
 # -------------------------------------
 #           ECS CLUSTER 
@@ -410,16 +592,22 @@ Resources:
       Family: !Sub ${AppName}-taskdef01
       RequiresCompatibilities:
         - 'EC2'
-      ExecutionRoleArn: !Ref EcsTaskExecRole
-      Memory: '400'
+      ExecutionRoleArn: !GetAtt  CustomEcsTaskExecRole.Arn
       NetworkMode: bridge
       ContainerDefinitions: 
         - Name: !Ref AppName
           Image: !Ref EcsDockerImage
-          Cpu: 256
+          Cpu: 300
+          MemoryReservation: 300
           PortMappings: 
             - ContainerPort: !Ref EcsContainerPort
               HostPort: 0
+          LogConfiguration:
+              LogDriver: awslogs 
+              Options: 
+                awslogs-group: !Ref DockerLogGroup
+                awslogs-region: !Ref 'AWS::Region'
+                awslogs-stream-prefix: !Ref 'AWS::StackName'
           Environment:
             -
               Name: spring.profiles.active
@@ -429,16 +617,13 @@ Resources:
               Value: !Join ['', ['jdbc:mysql://', !GetAtt [MasterDB, Endpoint.Address], ':', !GetAtt [MasterDB, Endpoint.Port], /, !Ref 'DBName']]
             -
               Name: spring.datasource.username
-              Value: !Ref DBUser
-            -
-              Name: spring.datasource.password
-              Value: !Ref DBPassword
+              Value: !Join ['', ['{{resolve:secretsmanager:', !Ref DbPasswordSecret, ':SecretString:username}}' ]]
             -
               Name: spring.datasource.initialize
               Value: 'true'
-          # Secrets:
-          #   - Name: spring.datasource.password
-          #     ValueFrom: !Ref DbPasswordSecret
+            - 
+              Name: spring.datasource.password
+              Value: !Join ['', ['{{resolve:secretsmanager:', !Ref DbPasswordSecret, ':SecretString:password}}' ]]
       Tags: 
         - Key: Name
           Value: !Sub ${AppName}-taskdef
@@ -472,7 +657,6 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties: 
       IpAddressType: ipv4
-      Name: 'vpc01-alb'
       Scheme: internet-facing
       SecurityGroups: 
         - !Ref SecurityGroup01
@@ -499,7 +683,6 @@ Resources:
     DependsOn: Alb
     Properties:
       VpcId: !Ref Vpc
-      Name: 'cluster01-tg'
       TargetType: instance
       Protocol: HTTP
       Port: 80
@@ -524,26 +707,48 @@ Resources:
       AllocatedStorage: !Ref DBAllocatedStorage
       DBInstanceClass: db.t2.micro
       Engine: !Ref RdsEngine
-      MasterUsername: !Ref DBUser
-      # MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DbPasswordSecret, ':SecretString:password}}' ]]
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref DbPasswordSecret, ':SecretString:username}}' ]]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DbPasswordSecret, ':SecretString:password}}' ]]
       MultiAZ: false
       Tags:
       - Key: Name
-        Value: petclinic-master
+        Value: !Sub ${AppName}-master
       VPCSecurityGroups: [ !GetAtt SecurityGroup03.GroupId ]
-      BackupRetentionPeriod: 2
+      BackupRetentionPeriod: 0
     DeletionPolicy: Snapshot
 
 # -------------------------------------
 #             CLOUDWATCH
 # -------------------------------------
-  ALBRequestsAlarm:
+  # Configure a Cloudwatch alarm that fires when ALB receives more than 100 req/min
+  EcsServiceScaleOutAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmDescription: Requests to ALB
-      AlarmName: !Sub ${AppName}-high-requests-count
+      AlarmDescription: 'Fires when ALB receives more than 100 req/min.'
+      AlarmName: !Sub ${AppName}-RequestCountHigh
       ComparisonOperator: GreaterThanOrEqualToThreshold
+      MetricName: RequestCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Sum
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            !GetAtt Alb.LoadBalancerFullName
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 100
+      TreatMissingData: missing
+      AlarmActions:
+        - !Ref AlarmTopic
+        - !Ref EcsServiceScaleOutPolicy
+
+  # Configure a Cloudwatch alarm that fires when ALB receives less than 10 req/min
+  EcsServiceScaleInAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: 'Fires when ALB receives less than 10 req/min.'
+      AlarmName: !Sub ${AppName}-RequestCountLow
+      ComparisonOperator: LessThanOrEqualToThreshold
       MetricName: RequestCount
       Namespace: AWS/ApplicationELB
       Statistic: Sum
@@ -557,14 +762,69 @@ Resources:
       TreatMissingData: missing
       AlarmActions:
         - !Ref AlarmTopic
+        - !Ref EcsServiceScaleInPolicy
+
+  # Configure Cloudwatch to send alerts via email when average Memory reservation of ASG instance exceeds the target value
+  EcsClusterScaleOutAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: 'Fires when average memory reservation of ASG instances exceeds the target value.'
+      AlarmName: !Sub ${AppName}-MemoryReservationHigh
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      MetricName: MemoryReservation
+      Namespace: AWS/ECS
+      Statistic: Average
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref EcsCluster
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 90
+      Unit: Percent
+      TreatMissingData: missing
+      AlarmActions:
+        - !Ref AlarmTopic
+        - !Ref EcsClusterScaleOutPolicy
+
+  EcsClusterScaleInAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: 'Fires when average memory reservation of ASG instances is below the target value.'
+      AlarmName: !Sub ${AppName}-MemoryReservationLow
+      ComparisonOperator: LessThanOrEqualToThreshold
+      MetricName: MemoryReservation
+      Namespace: AWS/ECS
+      Statistic: Average
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref EcsCluster
+      Period: 60
+      Unit: Percent
+      EvaluationPeriods: 1
+      Threshold: 50
+      TreatMissingData: missing
+      AlarmActions:
+        - !Ref AlarmTopic
+        - !Ref EcsClusterScaleInPolicy
 
   AlarmTopic:
       Type: "AWS::SNS::Topic"
       Properties:
-        TopicName: !Sub ${AppName}-requests-count-alert
+        TopicName: !Sub ${AppName}-alarmTopic
         Subscription:
           - Protocol: email
             Endpoint: liquid92@gmail.com
+
+  # Create Cloudwatch log groups
+  # EcsLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     RetentionInDays: 1
+
+  DockerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 1
 
 
 Outputs:
@@ -580,8 +840,5 @@ Outputs:
 Metadata:
   cfn-lint:
     config:
-      regions:
-      - us-west-1
-      - us-west-2
       ignore_checks:
       - W2
