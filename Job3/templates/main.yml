@@ -159,26 +159,6 @@ Resources:
           Value: EcsServiceStack
 
 # -------------------------------------
-#           AUTOSCALING STACK 
-# -------------------------------------
-  AutoscalingStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      TemplateURL:
-        Fn::Sub: "${BucketURL}/autoscaling-stack.yml"
-      Parameters:
-        Vpc: !GetAtt NetworkStack.Outputs.Vpc
-        AppName: !Ref AppName
-        TargetGroup01: !GetAtt EcsClusterStack.Outputs.TargetGroup01
-        EcsInstanceAsg: !GetAtt EcsClusterStack.Outputs.EcsInstanceAsg
-        EcsCluster: !GetAtt EcsClusterStack.Outputs.EcsCluster
-        EcsService: !GetAtt EcsServiceStack.Outputs.EcsService
-        EcsServiceName: !GetAtt EcsServiceStack.Outputs.EcsServiceName
-      Tags:
-        - Key: Name
-          Value: AutoscalingStack
-
-# -------------------------------------
 #           CLOUDWATCH STACK 
 # -------------------------------------
   CloudWatchStack:
