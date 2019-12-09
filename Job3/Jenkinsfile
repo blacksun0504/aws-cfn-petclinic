@@ -12,7 +12,7 @@ pipeline {
 
         stage('Clone Git repository') {
             steps{
-                    git branch: 'master', url: 'git@yoko.ukrtux.com:blacksun0504/jenkins-pipelines-petclinic.git', credentialsId: 'jenkins-gitlab-key'
+                    git branch: 'nested_stacks', url: 'git@yoko.ukrtux.com:blacksun0504/jenkins-pipelines-petclinic.git', credentialsId: 'jenkins-gitlab-key'
             }
         }
 
@@ -21,23 +21,39 @@ pipeline {
                 sh script: '''
                 if $(cfn-lint --version); 
                 then
-                    cfn-lint ${WORKSPACE}/Job3/infrastructure.yml;
+                    for i in ${WORKSPACE}/Job3/templates/*.yml; do
+                        [ -f "$i" ] || break
+                        cfn-lint ${WORKSPACE}/Job3/templates/$i
+                    done
                 else
                     sudo apt install python-pip -y && sudo pip install cfn-lint
-                    cfn-lint ${WORKSPACE}/Job3/infrastructure.yml;
+                    for i in *.yml; do
+                        [ -f "$i" ] || break
+                        cfn-lint ${WORKSPACE}/Job3/templates/$i
+                    done
                 fi'''
                 echo "Validating the template..."
-                sh "aws cloudformation validate-template --template-body file://${WORKSPACE}/Job3/infrastructure.yml"
+                sh script '''
+                for i in ${WORKSPACE}/Job3/templates/*.yml; do
+                    [ -f "$i" ] || break
+                    aws cloudformation validate-template --template-body file://${WORKSPACE}/Job3/templates/$i
+                done
+                '''
             }
         }
         stage('Upload Cloudformation templates to S3 bucket') {
             steps {
-                sh "aws s3 cp ${WORKSPACE}/Job3/infrastructure.yml ${s3_bucket}/infrastructure.yml"
+                sh script '''
+                for i in ${WORKSPACE}/Job3/templates/*.yml; do
+                    [ -f "$i" ] || break
+                    aws s3 cp ${WORKSPACE}/Job3/templates/$i ${s3_bucket}/$i
+                done
+                '''
             }
         }
         stage('Create or update the Cloudformation stack') {
             steps {
-                sh "aws cloudformation deploy --stack-name ${stack_name} --template-file ${WORKSPACE}/Job3/infrastructure.yml --capabilities CAPABILITY_IAM"
+                sh "aws cloudformation deploy --stack-name ${stack_name} --template-file ${WORKSPACE}/Job3/templates/main.yml --capabilities CAPABILITY_NAMED_IAM"
             }
         }
     }
