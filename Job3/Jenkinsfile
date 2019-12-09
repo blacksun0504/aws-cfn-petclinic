@@ -46,7 +46,7 @@ pipeline {
                 sh script: '''
                 for i in ${WORKSPACE}/Job3/templates/*.yml; do
                     [ -f "$i" ] || break
-                    $filename=$(basename $i)
+                    filename=$(basename $i)
                     aws s3 cp $i ${s3_bucket}/$filename
                 done
                 '''
