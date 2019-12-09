@@ -69,6 +69,7 @@ Resources:
       NetworkMode: bridge
       ContainerDefinitions: 
         - Name: !Ref AppName
+          Essential: true
           Image: !Ref EcsDockerImage
           Cpu: 300
           MemoryReservation: 300
