@@ -169,7 +169,7 @@ Resources:
       HealthCheckPort: traffic-port
       HealthCheckProtocol : HTTP
       HealthCheckTimeoutSeconds: 10
-      UnhealthyThresholdCount: 10
+      HealthyThresholdCount: 2
       Tags: 
         - Key: Name
           Value: !Sub ${AppName}-tg
