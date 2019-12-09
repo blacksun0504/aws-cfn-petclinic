@@ -98,6 +98,9 @@ Resources:
             - 
               Name: spring.datasource.password
               Value: !Join ['', ['{{resolve:secretsmanager:', !Ref DbPasswordSecret, ':SecretString:password}}' ]]
+            -
+              Name: logging.level.org.springframework
+              Value: DEBUG
       Tags: 
         - Key: Name
           Value: !Sub ${AppName}-taskdef
