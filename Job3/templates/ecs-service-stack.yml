@@ -62,7 +62,7 @@ Resources:
   EscTaskDef:
     Type: AWS::ECS::TaskDefinition
     Properties: 
-      Family: !Sub ${AppName}-taskdef01
+      Family: !Sub ${AppName}-taskdef
       RequiresCompatibilities:
         - 'EC2'
       ExecutionRoleArn: !GetAtt CustomEcsTaskExecRole.Arn
@@ -184,7 +184,7 @@ Resources:
       ScalingTargetId: !Ref ServiceScalingTarget
       StepScalingPolicyConfiguration:
         AdjustmentType: ChangeInCapacity
-        Cooldown: 60
+        Cooldown: 180
         MetricAggregationType: Average
         StepAdjustments:
           - 
@@ -208,7 +208,7 @@ Resources:
       ScalingTargetId: !Ref ServiceScalingTarget
       StepScalingPolicyConfiguration:
         AdjustmentType: ChangeInCapacity
-        Cooldown: 30
+        Cooldown: 180
         MetricAggregationType: Average
         StepAdjustments:
           - 
