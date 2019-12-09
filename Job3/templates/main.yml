@@ -147,6 +147,7 @@ Resources:
         EcsCluster: !GetAtt EcsClusterStack.Outputs.EcsCluster
         EcsContainerPort: !Ref EcsContainerPort
         EcsTaskCount: !Ref EcsTaskCount
+        EcsInstanceAsg: !GetAtt EcsClusterStack.Outputs.EcsInstanceAsg
         DBConnectionString: !GetAtt DatabaseStack.Outputs.MasterJDBCConnectionString
         HttpListener: !GetAtt EcsClusterStack.Outputs.HttpListener
         TargetGroup01: !GetAtt EcsClusterStack.Outputs.TargetGroup01
@@ -190,10 +191,10 @@ Resources:
         SNSEndpoint: !Ref SNSEndpoint
         EcsCluster: !GetAtt EcsClusterStack.Outputs.EcsCluster
         AlbName: !GetAtt EcsClusterStack.Outputs.AlbName
-        EcsServiceScaleOutPolicy: !GetAtt AutoscalingStack.Outputs.EcsServiceScaleOutPolicy
-        EcsServiceScaleInPolicy: !GetAtt AutoscalingStack.Outputs.EcsServiceScaleInPolicy
-        EcsClusterScaleOutPolicy: !GetAtt AutoscalingStack.Outputs.EcsClusterScaleOutPolicy
-        EcsClusterScaleInPolicy: !GetAtt AutoscalingStack.Outputs.EcsClusterScaleInPolicy
+        EcsServiceScaleOutPolicy: !GetAtt EcsServiceStack.Outputs.EcsServiceScaleOutPolicy
+        EcsServiceScaleInPolicy: !GetAtt EcsServiceStack.Outputs.EcsServiceScaleInPolicy
+        EcsClusterScaleOutPolicy: !GetAtt EcsClusterStack.Outputs.EcsClusterScaleOutPolicy
+        EcsClusterScaleInPolicy: !GetAtt EcsClusterStack.Outputs.EcsClusterScaleInPolicy
       Tags:
         - Key: Name
           Value: CloudWatchStack

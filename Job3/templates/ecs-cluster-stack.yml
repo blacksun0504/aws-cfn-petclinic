@@ -41,7 +41,7 @@ Parameters:
 
 Resources:
 # -------------------------------------
-#                 ASG 
+#              AUTOSCALING 
 # -------------------------------------
   # Create a launch configuration for ECS ASG 
   EcsInstanceLc:
@@ -95,6 +95,25 @@ Resources:
         - Key: Name
           Value: !Sub ${AppName}-asg
           PropagateAtLaunch: true
+  # Create a cluster scale-out policy based on memory reservation
+  EcsClusterScaleOutPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref EcsInstanceAsg
+      AdjustmentType: ChangeInCapacity
+      PolicyType: SimpleScaling
+      ScalingAdjustment: 1
+      Cooldown: '60'
+
+  # Create a scale-in policy based on memory reservation
+  EcsClusterScaleInPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref EcsInstanceAsg
+      AdjustmentType: ChangeInCapacity
+      PolicyType: SimpleScaling
+      ScalingAdjustment: -1
+      Cooldown: '60'
 
 # -------------------------------------
 #            ECS CLUSTER 
@@ -250,33 +269,29 @@ Resources:
         - !Ref CustomEcsInstanceRole
 
 Outputs:
-
   LoadBalancerUrl:
     Description: URL of the ALB in from of the ECS cluster
     Value: !Join ['', ['http://', !GetAtt Alb.DNSName ]]
-
   TargetGroup01:
     Value: !Ref TargetGroup01
-
   EcsCluster:
     Value: !Ref EcsCluster
-
   SecurityGroup01:
     Description: "Public access Security Group ID"
     Value: !Ref SecurityGroup01
-
   SecurityGroup02:
     Description: "ALB to ECS access Security Group ID"
     Value: !Ref SecurityGroup02
-  
   HttpListener:
     Value: !Ref HttpListener
-  
   EcsInstanceAsg:
     Value: !Ref EcsInstanceAsg
-
   AlbName:
     Value: !GetAtt Alb.LoadBalancerFullName
+  EcsClusterScaleInPolicy:
+    Value: !Ref EcsClusterScaleInPolicy
+  EcsClusterScaleOutPolicy:
+    Value: !Ref EcsClusterScaleOutPolicy  
 
 Metadata:
   cfn-lint:

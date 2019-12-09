@@ -4,6 +4,8 @@ Description: >
 Parameters:
   EcsCluster:
     Type: String
+  EcsInstanceAsg:
+    Type: String
   Vpc:
     Type: AWS::EC2::VPC::Id
   EcsAmiId:
@@ -159,6 +161,62 @@ Resources:
     Properties:
       RetentionInDays: 1
 
+# -------------------------------------
+#         SERVICE AUTOSCALING
+# -------------------------------------
+  # Create a scalable target for the ECS service
+  ServiceScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 9
+      MinCapacity: 4
+      ResourceId: !Join ['', [service/, !Ref EcsCluster, /, !GetAtt [EcsService, Name]]]
+      RoleARN: !Ref EcsAutoscalingRole
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  # Create a service scale-out policy based on ALB requests count
+  EcsServiceScaleOutPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: EcsServiceScaleOutPolicy
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        Cooldown: 60
+        MetricAggregationType: Average
+        StepAdjustments:
+          - 
+            ScalingAdjustment: 1
+            MetricIntervalLowerBound: 0
+            MetricIntervalUpperBound: 100
+          - 
+            ScalingAdjustment: 2
+            MetricIntervalLowerBound: 100
+            MetricIntervalUpperBound: 200
+          - 
+            ScalingAdjustment: 3
+            MetricIntervalLowerBound: 200
+
+  # Create a scale-in policy based on ALB requests count
+  EcsServiceScaleInPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: EcsServiceScaleInPolicy
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        Cooldown: 30
+        MetricAggregationType: Average
+        StepAdjustments:
+          - 
+            ScalingAdjustment: -1
+            MetricIntervalUpperBound: 0
+
+
+
 Outputs:
   DockerLogGroup:
     Value: !Ref DockerLogGroup
@@ -168,6 +226,12 @@ Outputs:
 
   EcsServiceName:
     Value: !GetAtt EcsService.Name
+
+  EcsServiceScaleInPolicy:
+    Value: !Ref EcsServiceScaleInPolicy  
+
+  EcsServiceScaleOutPolicy:
+    Value: !Ref EcsServiceScaleOutPolicy
 
 Metadata:
   cfn-lint:
