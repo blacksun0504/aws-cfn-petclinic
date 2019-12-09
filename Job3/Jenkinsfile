@@ -23,20 +23,20 @@ pipeline {
                 then
                     for i in ${WORKSPACE}/Job3/templates/*.yml; do
                         [ -f "$i" ] || break
-                        cfn-lint ${WORKSPACE}/Job3/templates/$i
+                        cfn-lint "$i"
                     done
                 else
                     sudo apt install python-pip -y && sudo pip install cfn-lint
                     for i in *.yml; do
                         [ -f "$i" ] || break
-                        cfn-lint ${WORKSPACE}/Job3/templates/$i
+                        cfn-lint "$i"
                     done
                 fi'''
                 echo "Validating the template..."
                 sh script: '''
                 for i in ${WORKSPACE}/Job3/templates/*.yml; do
                     [ -f "$i" ] || break
-                    aws cloudformation validate-template --template-body file://${WORKSPACE}/Job3/templates/$i
+                    aws cloudformation validate-template --template-body file://$i
                 done
                 '''
             }
@@ -46,7 +46,8 @@ pipeline {
                 sh script: '''
                 for i in ${WORKSPACE}/Job3/templates/*.yml; do
                     [ -f "$i" ] || break
-                    aws s3 cp ${WORKSPACE}/Job3/templates/$i ${s3_bucket}/$i
+                    $filename=$(basename $i)
+                    aws s3 cp $i ${s3_bucket}/$filename
                 done
                 '''
             }
