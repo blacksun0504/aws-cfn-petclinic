@@ -36,8 +36,8 @@ pipeline {
         stage('Create or update the Cloudformation stack') {
             steps {
                 echo "Selected version ${env.tag_response} to deploy."
-                sh "aws cloudformation deploy --stack-name ${stack_name} --template-file ${WORKSPACE}/Job3/infrastructure.yml \
-                    --parameter-overrides EcsDockerImage=264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic:${env.tag_response}"
+                sh "aws cloudformation deploy --stack-name ${stack_name} --template-file ${WORKSPACE}/Job3/templates/main.yml \
+                    --parameter-overrides EcsDockerImage=264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic:${env.tag_response} --capabilities CAPABILITY_NAMED_IAM"
 
             }
         }
