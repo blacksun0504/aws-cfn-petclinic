@@ -33,7 +33,7 @@ pipeline {
                     done
                 fi'''
                 echo "Validating the template..."
-                sh script '''
+                sh script: '''
                 for i in ${WORKSPACE}/Job3/templates/*.yml; do
                     [ -f "$i" ] || break
                     aws cloudformation validate-template --template-body file://${WORKSPACE}/Job3/templates/$i
@@ -43,7 +43,7 @@ pipeline {
         }
         stage('Upload Cloudformation templates to S3 bucket') {
             steps {
-                sh script '''
+                sh script: '''
                 for i in ${WORKSPACE}/Job3/templates/*.yml; do
                     [ -f "$i" ] || break
                     aws s3 cp ${WORKSPACE}/Job3/templates/$i ${s3_bucket}/$i
