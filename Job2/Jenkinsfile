@@ -29,7 +29,7 @@ pipeline {
 
         stage('Clone Git repository with cfn templates') {
             steps {
-                git branch: 'master', url: 'git@yoko.ukrtux.com:blacksun0504/jenkins-pipelines-petclinic.git', credentialsId: 'jenkins-gitlab-key'
+                git branch: 'nested_stacks', url: 'git@yoko.ukrtux.com:blacksun0504/jenkins-pipelines-petclinic.git', credentialsId: 'jenkins-gitlab-key'
             }
         }
 
