@@ -1,0 +1,285 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an ECS cluster with ASG and ALB.
+Parameters:
+  EcsAmiId:
+    Type: AWS::EC2::Image::Id
+    Description: Specifies the AMI ID for the container instances.
+    Default: 'ami-0fb71e703258ab7eb' # ECS-optimized Amazon Linux AMI 2
+  EcsInstanceType:
+    Type: String
+    Description: >
+      Specifies the EC2 instance type for the container instances.
+    Default: t2.micro
+  AsgMinSize:
+    Type: String
+  AsgMaxSize:
+    Type: String
+  AsgDesiredSize:
+    Type: String
+  EcsServiceRole:
+    Type: String
+    Default: 'arn:aws:iam::264800517173:role/aws-service-role/ecs.amazonaws.com/AWSServiceRoleForECS'
+  EcsInstancePolicy:
+    Type: String
+    Default: 'arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role'
+  EcsAutoscalingRole:
+    Type: String
+    Default: 'arn:aws:iam::264800517173:role/ecsAutoscaleRole'
+  KeyName:
+    Type: String
+  AppName:
+    Type: String
+  PubSubnetAz1:
+    Type: AWS::EC2::Subnet::Id
+  PubSubnetAz2:
+    Type: AWS::EC2::Subnet::Id
+  Vpc:
+    Type: AWS::EC2::VPC::Id
+  AttachGateway:
+    Type: String
+
+Resources:
+# -------------------------------------
+#                 ASG 
+# -------------------------------------
+  # Create a launch configuration for ECS ASG 
+  EcsInstanceLc:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !Ref EcsAmiId
+      InstanceType: !Ref EcsInstanceType
+      AssociatePublicIpAddress: true
+      IamInstanceProfile: !Ref CustomEcsInstanceProfile
+      KeyName: !Ref KeyName
+      SecurityGroups: [ !Ref SecurityGroup02 ]
+      PlacementTenancy: default
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config
+          yum update -y
+          yum install -y aws-cfn-bootstrap aws-cli awslogs 
+          EC2_INSTANCE_ID=$(curl http://169.254.169.254/latest/meta-data/instance-id)
+          REGION=$(curl 169.254.169.254/latest/meta-data/placement/availability-zone | sed s'/.$//')
+          cat > /etc/awslogs/awslogs.conf << EOF
+          [general]
+          state_file = /var/lib/awslogs/agent-state
+          [/var/log/ecs/ecs-agent.log]
+          datetime_format = %b %d %H:%M:%S
+          file = /var/log/ecs/ecs-agent.log*
+          log_group_name = EcsAgentLogs
+          log_stream_name = ${EcsCluster}/${AppName}/$EC2_INSTANCE_ID
+          EOF
+          # Set the region to send CloudWatch Logs data to (the region where the container instance is located)
+          sed -i -e "s/region = us-east-1/region = $REGION/g" /etc/awslogs/awscli.conf
+          sudo systemctl start awslogsd
+
+  # Create an ASG for the ECS cluster
+  EcsInstanceAsg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub ${AppName}-asg
+      LaunchConfigurationName: !Ref EcsInstanceLc
+      HealthCheckGracePeriod: 300
+      HealthCheckType: EC2
+      VPCZoneIdentifier:
+        - !Ref PubSubnetAz1
+        - !Ref PubSubnetAz2
+      TargetGroupARNs:
+        - !Ref TargetGroup01
+      MinSize: !Ref AsgMinSize
+      DesiredCapacity: !Ref AsgDesiredSize
+      MaxSize: !Ref AsgMaxSize
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-asg
+          PropagateAtLaunch: true
+
+# -------------------------------------
+#            ECS CLUSTER 
+# -------------------------------------
+  # Create ECS cluster
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties: 
+      ClusterName: 'cluster01'
+      Tags: 
+        - Key: Name
+          Value: !Sub ${AppName}-cluster
+
+# -------------------------------------
+#           LOAD BALANCING 
+# -------------------------------------
+  # Create an ALB to use with ECS
+  Alb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties: 
+      IpAddressType: ipv4
+      Scheme: internet-facing
+      SecurityGroups: 
+        - !Ref SecurityGroup01
+      Subnets: 
+        - !Ref PubSubnetAz1
+        - !Ref PubSubnetAz2
+      Tags: 
+        - Key: Name
+          Value: !Sub ${AppName}-alb
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref Alb
+      DefaultActions:
+        - TargetGroupArn: !Ref TargetGroup01
+          Type: forward
+      Protocol: HTTP
+      Port: 80
+
+  # Create a target group for the ALB
+  TargetGroup01:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: Alb
+    Properties:
+      VpcId: !Ref Vpc
+      TargetType: instance
+      Protocol: HTTP
+      Port: 80
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: "/"
+      HealthCheckPort: traffic-port
+      HealthCheckProtocol : HTTP
+      HealthCheckTimeoutSeconds: 10
+      UnhealthyThresholdCount: 10
+      Tags: 
+        - Key: Name
+          Value: !Sub ${AppName}-tg
+
+# -------------------------------------
+#          SECURITY GROUPS 
+# -------------------------------------
+  # Create a security group for allowing traffic from everywhere on ports 80, 8080, and 22
+  SecurityGroup01:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: 'Allow traffic from everywhere on ports 80 and 22.'
+      GroupName: 'vpc01: public access'
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          FromPort: 0
+          ToPort: 0
+          CidrIp: '0.0.0.0/0'
+      Tags: 
+        - Key: Name
+          Value: 'vpc01-sg01'
+
+  # Create a security group for allowing traffic to ECS instances from everywhere on all ports from the ALB
+  SecurityGroup02:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: 'Allow traffic from ALB to the ECS instances on all ports.'
+      GroupName: 'vpc01: ecs access'
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          SourceSecurityGroupId: !GetAtt SecurityGroup01.GroupId
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: '0.0.0.0/0'
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          FromPort: 0
+          ToPort: 0
+          CidrIp: '0.0.0.0/0'
+      Tags: 
+        - Key: Name
+          Value: 'vpc01-sg02'
+
+
+# -------------------------------------
+#                 IAM 
+# ------------------------------------- 
+  CustomEcsInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - !Ref EcsInstancePolicy
+      Policies:
+        - PolicyName: SecretsReadPolicy
+          PolicyDocument: {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": [
+                        "logs:CreateLogGroup",
+                        "logs:CreateLogStream"
+                    ],
+                    "Effect": "Allow",
+                    "Resource": "*"
+                }
+              ]
+            }
+  CustomEcsInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      InstanceProfileName: CustomEcsInstanceProfile
+      Path: "/"
+      Roles: 
+        - !Ref CustomEcsInstanceRole
+
+Outputs:
+
+  LoadBalancerUrl:
+    Description: URL of the ALB in from of the ECS cluster
+    Value: !Join ['', ['http://', !GetAtt Alb.DNSName ]]
+
+  TargetGroup01:
+    Value: !Ref TargetGroup01
+
+  EcsCluster:
+    Value: !Ref EcsCluster
+
+  SecurityGroup01:
+    Description: "Public access Security Group ID"
+    Value: !Ref SecurityGroup01
+
+  SecurityGroup02:
+    Description: "ALB to ECS access Security Group ID"
+    Value: !Ref SecurityGroup02
+  
+  HttpListener:
+    Value: !Ref HttpListener
+  
+  EcsInstanceAsg:
+    Value: !Ref EcsInstanceAsg
+
+  AlbName:
+    Value: !GetAtt Alb.LoadBalancerFullName
+
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+      - W2

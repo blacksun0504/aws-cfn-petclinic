@@ -1,0 +1,176 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates an ECS service with the correspoding task definition.
+Parameters:
+  EcsCluster:
+    Type: String
+  Vpc:
+    Type: AWS::EC2::VPC::Id
+  EcsAmiId:
+    Type: AWS::EC2::Image::Id
+    Description: Specifies the AMI ID for the container instances.
+    Default: 'ami-0fb71e703258ab7eb' # ECS-optimized Amazon Linux AMI 2
+  EcsInstanceType:
+    Type: String
+    Description: >
+      Specifies the EC2 instance type for the container instances.
+    Default: t2.micro
+  EcsTaskCount:
+    Type: Number
+  EcsServiceRole:
+    Type: String
+    Default: 'arn:aws:iam::264800517173:role/aws-service-role/ecs.amazonaws.com/AWSServiceRoleForECS'
+  EcsInstanceProfile:
+    Type: String
+    Default: 'arn:aws:iam::264800517173:instance-profile/ecsInstanceRole'
+  CustomEcsInstancePolicy:
+    Type: String
+    Default: 'arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role'
+  EcsTaskExecPolicy:
+    Type: String
+    Default: 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+  EcsAutoscalingRole:
+    Type: String
+    Default: 'arn:aws:iam::264800517173:role/ecsAutoscaleRole'
+  EcsDockerImage:
+    Type: String
+  CloudWatchLogsPolicy:
+    Type: String
+    Default: 'arn:aws:iam::264800517173:policy/CloudwatchLogsAgentPolicy'
+  EcsContainerPort:
+    Type: Number
+  AppName:
+    Type: String
+  DBConnectionString:
+    Type: String
+  HttpListener:
+    Type: String
+  TargetGroup01:
+    Type: String
+  DbPasswordSecret:
+    Type: String
+  SecurityGroup02:
+    Type: AWS::EC2::SecurityGroup::Id
+
+Resources:
+# -------------------------------------
+#            ECS SERVICE 
+# -------------------------------------
+  # Create a task definition for the service
+  EscTaskDef:
+    Type: AWS::ECS::TaskDefinition
+    Properties: 
+      Family: !Sub ${AppName}-taskdef01
+      RequiresCompatibilities:
+        - 'EC2'
+      ExecutionRoleArn: !GetAtt CustomEcsTaskExecRole.Arn
+      NetworkMode: bridge
+      ContainerDefinitions: 
+        - Name: !Ref AppName
+          Image: !Ref EcsDockerImage
+          Cpu: 300
+          MemoryReservation: 300
+          PortMappings: 
+            - ContainerPort: !Ref EcsContainerPort
+              HostPort: 0
+          LogConfiguration:
+              LogDriver: awslogs 
+              Options: 
+                awslogs-group: !Ref DockerLogGroup
+                awslogs-region: !Ref 'AWS::Region'
+                awslogs-stream-prefix: !Ref 'AWS::StackName'
+          Environment:
+            -
+              Name: spring.profiles.active
+              Value: mysql
+            -
+              Name: spring.datasource.url
+              Value: !Ref DBConnectionString
+            -
+              Name: spring.datasource.username
+              Value: !Join ['', ['{{resolve:secretsmanager:', !Ref DbPasswordSecret, ':SecretString:username}}' ]]
+            -
+              Name: spring.datasource.initialize
+              Value: 'true'
+            - 
+              Name: spring.datasource.password
+              Value: !Join ['', ['{{resolve:secretsmanager:', !Ref DbPasswordSecret, ':SecretString:password}}' ]]
+      Tags: 
+        - Key: Name
+          Value: !Sub ${AppName}-taskdef
+
+  # Create an ECS service based on the task defition created earlier
+  EcsService:
+    Type: AWS::ECS::Service
+    Properties: 
+      ServiceName: !Sub srv01-${AppName}
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref EscTaskDef
+      DesiredCount: !Ref EcsTaskCount
+      LaunchType: EC2
+      HealthCheckGracePeriodSeconds: 300
+      Role: !Ref EcsServiceRole
+      LoadBalancers:
+        - 
+          ContainerPort: 80
+          ContainerName: !Ref AppName
+          TargetGroupArn: !Ref TargetGroup01
+      DeploymentConfiguration:
+        MaximumPercent: 100
+        MinimumHealthyPercent: 50
+
+# -------------------------------------
+#              IAM ROLE
+# -------------------------------------
+  CustomEcsTaskExecRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ecs-tasks.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - !Ref EcsTaskExecPolicy
+      Policies:
+        - PolicyName: SecretsReadPolicy
+          PolicyDocument: {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": [
+                        "secretsmanager:GetSecretValue"
+                    ],
+                    "Effect": "Allow",
+                    "Resource": "*"
+                }
+              ]
+            }
+
+# -------------------------------------
+#         CLOUDWATCH LOGS
+# -------------------------------------
+  DockerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 1
+
+Outputs:
+  DockerLogGroup:
+    Value: !Ref DockerLogGroup
+  
+  EcsService:
+    Value: !Ref EcsService
+
+  EcsServiceName:
+    Value: !GetAtt EcsService.Name
+
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+      - W2

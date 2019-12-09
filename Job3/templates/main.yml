@@ -1,0 +1,234 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AWS CloudFormation template to create a new VPC
+  with the ECS cluster and ASG.
+Parameters:
+  BucketURL:
+    Type: String
+    Default: 'https://devopslabs3.s3-us-west-2.amazonaws.com/cfn-templates'
+  VpcCidr:
+    Type: String
+    Description: Specifies the CIDR Block of VPC
+    Default: '10.10.0.0/16'
+  SubnetCidr1:
+    Type: String
+    Description: Specifies the CIDR Block of Subnet 1
+    Default: '10.10.0.0/24'
+  SubnetCidr2:
+    Type: String
+    Description: Specifies the CIDR Block of Subnet 2
+    Default: '10.10.1.0/24'
+  SubnetCidr3:
+    Type: String
+    Description: Specifies the CIDR Block of Subnet 3
+    Default: '10.10.2.0/24'
+  SubnetCidr4:
+    Type: String
+    Description: Specifies the CIDR Block of Subnet 4
+    Default: '10.10.3.0/24'
+  Az1:
+    Type: String
+    Default: 'us-west-2a'
+  Az2:
+    Type: String
+    Default: 'us-west-2b'
+  EcsAmiId:
+    Type: AWS::EC2::Image::Id
+    Description: Specifies the AMI ID for the container instances.
+    Default: 'ami-0fb71e703258ab7eb' # ECS-optimized Amazon Linux AMI 2
+  EcsInstanceType:
+    Type: String
+    Description: >
+      Specifies the EC2 instance type for the container instances.
+    Default: t2.micro
+  AsgMinSize:
+    Type: String
+    Default: '2'
+  AsgMaxSize:
+    Type: String
+    Default: '3'
+  AsgDesiredSize:
+    Type: String
+    Default: '2'
+  EcsTaskCount:
+    Type: Number
+    Default: 4
+  EcsTaskExecPolicy:
+    Type: String
+    Default: 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+  EcsDockerImage:
+    Type: String
+    Default: '264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic:2.1.53'
+  EcsContainerPort:
+    Type: Number
+    Default: 80
+  KeyName:
+    Type: String
+    Default: DevopsLabKeys
+  AppName:
+    Type: String
+    Default: petclinic
+  DBName:
+    Default: petclinic
+    Type: String
+  DBUser:
+    NoEcho: 'true'
+    Description: The database admin account username
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric
+      characters.
+    Default: root
+  DBAllocatedStorage:
+    Default: '5'
+    Description: The size of the database (Gb)
+    Type: Number
+    MinValue: '5'
+    MaxValue: '1024'
+    ConstraintDescription: must be between 5 and 1024Gb.
+  SNSEndpoint:
+    Type: String
+    Default: liquid92@gmail.com
+
+Resources:
+# -------------------------------------
+#            NETWORK STACK 
+# -------------------------------------
+  NetworkStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL:
+        Fn::Sub: "${BucketURL}/network-stack.yml"
+      Parameters:
+        VpcCidr: !Ref VpcCidr
+        SubnetCidr1: !Ref SubnetCidr1
+        SubnetCidr2: !Ref SubnetCidr2
+        SubnetCidr3: !Ref SubnetCidr3
+        SubnetCidr4: !Ref SubnetCidr4
+        Az1: !Ref Az1
+        Az2: !Ref Az2
+      Tags:
+        - Key: Name
+          Value: NetworkStack
+
+# -------------------------------------
+#              ECS STACKS 
+# -------------------------------------
+  EcsClusterStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL:
+        Fn::Sub: "${BucketURL}/ecs-cluster-stack.yml"
+      Parameters:
+        AppName: !Ref AppName
+        KeyName: !Ref KeyName
+        EcsAmiId: !Ref EcsAmiId
+        AsgMaxSize: !Ref AsgMaxSize
+        AsgMinSize: !Ref AsgMinSize
+        AsgDesiredSize: !Ref AsgDesiredSize
+        PubSubnetAz1: !GetAtt NetworkStack.Outputs.PubSubnetAz1
+        PubSubnetAz2: !GetAtt NetworkStack.Outputs.PubSubnetAz2
+        AttachGateway: !GetAtt NetworkStack.Outputs.AttachGateway
+        Vpc: !GetAtt NetworkStack.Outputs.Vpc
+      Tags:
+        - Key: Name
+          Value: EcsClusterStack
+
+  EcsServiceStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL:
+        Fn::Sub: "${BucketURL}/ecs-service-stack.yml"
+      Parameters:
+        AppName: !Ref AppName
+        EcsDockerImage: !Ref EcsDockerImage
+        EcsCluster: !GetAtt EcsClusterStack.Outputs.EcsCluster
+        EcsContainerPort: !Ref EcsContainerPort
+        EcsTaskCount: !Ref EcsTaskCount
+        DBConnectionString: !GetAtt DatabaseStack.Outputs.MasterJDBCConnectionString
+        HttpListener: !GetAtt EcsClusterStack.Outputs.HttpListener
+        TargetGroup01: !GetAtt EcsClusterStack.Outputs.TargetGroup01
+        Vpc: !GetAtt NetworkStack.Outputs.Vpc
+        SecurityGroup02: !GetAtt EcsClusterStack.Outputs.SecurityGroup02
+        DbPasswordSecret: !GetAtt DatabaseStack.Outputs.DbPasswordSecret
+      Tags:
+        - Key: Name
+          Value: EcsServiceStack
+
+# -------------------------------------
+#           AUTOSCALING STACK 
+# -------------------------------------
+  AutoscalingStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL:
+        Fn::Sub: "${BucketURL}/autoscaling-stack.yml"
+      Parameters:
+        Vpc: !GetAtt NetworkStack.Outputs.Vpc
+        AppName: !Ref AppName
+        TargetGroup01: !GetAtt EcsClusterStack.Outputs.TargetGroup01
+        EcsInstanceAsg: !GetAtt EcsClusterStack.Outputs.EcsInstanceAsg
+        EcsCluster: !GetAtt EcsClusterStack.Outputs.EcsCluster
+        EcsService: !GetAtt EcsServiceStack.Outputs.EcsService
+        EcsServiceName: !GetAtt EcsServiceStack.Outputs.EcsServiceName
+      Tags:
+        - Key: Name
+          Value: AutoscalingStack
+
+# -------------------------------------
+#           CLOUDWATCH STACK 
+# -------------------------------------
+  CloudWatchStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL:
+        Fn::Sub: "${BucketURL}/cloudwatch-stack.yml"
+      Parameters:
+        AppName: !Ref AppName
+        SNSEndpoint: !Ref SNSEndpoint
+        EcsCluster: !GetAtt EcsClusterStack.Outputs.EcsCluster
+        AlbName: !GetAtt EcsClusterStack.Outputs.AlbName
+        EcsServiceScaleOutPolicy: !GetAtt AutoscalingStack.Outputs.EcsServiceScaleOutPolicy
+        EcsServiceScaleInPolicy: !GetAtt AutoscalingStack.Outputs.EcsServiceScaleInPolicy
+        EcsClusterScaleOutPolicy: !GetAtt AutoscalingStack.Outputs.EcsClusterScaleOutPolicy
+        EcsClusterScaleInPolicy: !GetAtt AutoscalingStack.Outputs.EcsClusterScaleInPolicy
+      Tags:
+        - Key: Name
+          Value: CloudWatchStack
+
+# -------------------------------------
+#           DATABASE STACK 
+# -------------------------------------
+  DatabaseStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL:
+        Fn::Sub: "${BucketURL}/database-stack.yml"
+      Parameters:
+        Vpc: !GetAtt NetworkStack.Outputs.Vpc
+        AppName: !Ref AppName
+        DbSubnetGroup: !GetAtt NetworkStack.Outputs.DbSubnetGroup
+        DBName: !Ref DBName
+        DBUser: !Ref DBUser
+        SecurityGroup02: !GetAtt EcsClusterStack.Outputs.SecurityGroup02
+      Tags:
+        - Key: Name
+          Value: DatabaseStack
+
+
+Outputs:
+  LoadBalancerURL:
+    Description: URL of the ALB in from of the ECS cluster
+    Value: !GetAtt EcsClusterStack.Outputs.LoadBalancerUrl
+  
+  JDBCConnectionString:
+    Description: JDBC connection string for the master database
+    Value: !GetAtt DatabaseStack.Outputs.MasterJDBCConnectionString
+
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+      - W2

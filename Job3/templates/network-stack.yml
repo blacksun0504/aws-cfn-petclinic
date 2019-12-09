@@ -1,0 +1,201 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Creates a new VPC with public and private subnets.
+Parameters:
+  VpcCidr:
+    Type: String
+    # Description: Specifies the CIDR Block of VPC
+    # Default: '10.10.0.0/16'
+  SubnetCidr1:
+    Type: String
+    # Description: Specifies the CIDR Block of Subnet 1
+    # Default: '10.10.0.0/24'
+  SubnetCidr2:
+    Type: String
+    # Description: Specifies the CIDR Block of Subnet 2
+    # Default: '10.10.1.0/24'
+  SubnetCidr3:
+    Type: String
+    # Description: Specifies the CIDR Block of Subnet 3
+    # Default: '10.10.2.0/24'
+  SubnetCidr4:
+    Type: String
+    # Description: Specifies the CIDR Block of Subnet 4
+    # Default: '10.10.3.0/24'
+  Az1:
+    Type: String
+    # Default: 'us-west-2a'
+  Az2:
+    Type: String
+    # Default: 'us-west-2b'
+
+Resources:
+# -------------------------------------
+#             NETWORKING 
+# -------------------------------------
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: vpc01
+
+  # Create two public subnets in different AZ
+  PubSubnetAz1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref SubnetCidr1
+      AvailabilityZone: !Ref Az1
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: vpc01-pub01
+
+  PubSubnetAz2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref SubnetCidr2
+      AvailabilityZone: !Ref Az2
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: 'vpc01-pub02'
+
+  # Create two private subnets in different AZ
+  PrivSubnetAz1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref SubnetCidr3
+      AvailabilityZone: !Ref Az1
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: 'vpc01-priv01'
+
+  PrivSubnetAz2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref SubnetCidr4
+      AvailabilityZone: !Ref Az2
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: 'vpc01-priv02'
+
+  # Create internet gateway and attach it to VPC
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: 'vpc01-igw'
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  # Create a routing table for public subnets with internet gateway
+  RouteViaIgw:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+
+  PublicRouteViaIgw:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref RouteViaIgw
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  # Associate routing table 1 with public subnets
+  PubSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PubSubnetAz1
+      RouteTableId: !Ref RouteViaIgw
+
+  PubSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PubSubnetAz2
+      RouteTableId: !Ref RouteViaIgw
+
+  # Create a NAT gateway with EIP to provide internet access for private subnets
+  NatEip:
+    Type: AWS::EC2::EIP
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: !Ref PubSubnetAz1
+      AllocationId: !GetAtt NatEip.AllocationId
+
+  # Create a routing table for public subnets with NAT gateway attachment
+  RouteViaNat:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+
+  PrivateRouteViaNat:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteViaNat
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway
+
+  # Associate routing table 2 with private subnets
+  PrivSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivSubnetAz1
+      RouteTableId: !Ref RouteViaNat
+
+  PrivSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivSubnetAz2
+      RouteTableId: !Ref RouteViaNat
+  
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties: 
+      DBSubnetGroupDescription: description
+      SubnetIds: 
+        - !Ref PrivSubnetAz1
+        - !Ref PrivSubnetAz2
+      Tags: 
+        - 
+          Key: Name
+          Value: 'vpc01-subnetgroup'
+
+Outputs:
+
+  PubSubnetAz1:
+    Value: !Ref PubSubnetAz1
+
+  PubSubnetAz2:
+    Value: !Ref PubSubnetAz2
+  
+  AttachGateway:
+    Value: !Ref AttachGateway  
+
+  Vpc:
+    Value: !Ref Vpc
+  
+  DbSubnetGroup:
+    Value: !Ref DbSubnetGroup
+
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+      - W2
