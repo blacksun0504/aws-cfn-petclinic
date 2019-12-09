@@ -113,6 +113,9 @@ Resources:
       Cluster: !Ref EcsCluster
       TaskDefinition: !Ref EscTaskDef
       DesiredCount: !Ref EcsTaskCount
+      PlacementStrategies: 
+        - Field: host 
+          Type: spread
       LaunchType: EC2
       HealthCheckGracePeriodSeconds: 300
       Role: !Ref EcsServiceRole
