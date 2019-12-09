@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AWS CloudFormation template to create a new VPC
+  with the ECS cluster and ASG.
+Parameters:
+  EcsCluster:
+    Type: String
+  EcsServiceScaleOutPolicy:
+    Type: String
+  EcsServiceScaleInPolicy:
+    Type: String  
+  EcsClusterScaleOutPolicy:
+    Type: String  
+  EcsClusterScaleInPolicy:
+    Type: String  
+  EcsServiceRole:
+    Type: String
+    Default: 'arn:aws:iam::264800517173:role/aws-service-role/ecs.amazonaws.com/AWSServiceRoleForECS'
+  EcsInstanceProfile:
+    Type: String
+    Default: 'arn:aws:iam::264800517173:instance-profile/ecsInstanceRole'
+  CustomEcsInstancePolicy:
+    Type: String
+    Default: 'arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role'
+  EcsTaskExecPolicy:
+    Type: String
+    Default: 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+  EcsAutoscalingRole:
+    Type: String
+    Default: 'arn:aws:iam::264800517173:role/ecsAutoscaleRole'
+  AppName:
+    Type: String
+  SNSEndpoint:
+    Type: String
+  AlbName:
+    Type: String
+
+Resources:
+# -------------------------------------
+#             CLOUDWATCH
+# -------------------------------------
+  # Configure a Cloudwatch alarm that fires when ALB receives more than 100 req/min
+  EcsServiceScaleOutAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: 'Fires when ALB receives more than 100 req/min.'
+      AlarmName: !Sub ${AppName}-RequestCountHigh
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      MetricName: RequestCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Sum
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbName
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 100
+      TreatMissingData: missing
+      AlarmActions:
+        - !Ref AlarmTopic
+        - !Ref EcsServiceScaleOutPolicy
+
+  # Configure a Cloudwatch alarm that fires when ALB receives less than 10 req/min
+  EcsServiceScaleInAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: 'Fires when ALB receives less than 10 req/min.'
+      AlarmName: !Sub ${AppName}-RequestCountLow
+      ComparisonOperator: LessThanOrEqualToThreshold
+      MetricName: RequestCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Sum
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbName
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 10
+      TreatMissingData: missing
+      AlarmActions:
+        - !Ref AlarmTopic
+        - !Ref EcsServiceScaleInPolicy
+
+  # Configure Cloudwatch to send alerts via email when average Memory reservation of ASG instance exceeds the target value
+  EcsClusterScaleOutAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: 'Fires when average memory reservation of ASG instances exceeds the target value.'
+      AlarmName: !Sub ${AppName}-MemoryReservationHigh
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      MetricName: MemoryReservation
+      Namespace: AWS/ECS
+      Statistic: Average
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref EcsCluster
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 90
+      Unit: Percent
+      TreatMissingData: missing
+      AlarmActions:
+        - !Ref AlarmTopic
+        - !Ref EcsClusterScaleOutPolicy
+
+  EcsClusterScaleInAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: 'Fires when average memory reservation of ASG instances is below the target value.'
+      AlarmName: !Sub ${AppName}-MemoryReservationLow
+      ComparisonOperator: LessThanOrEqualToThreshold
+      MetricName: MemoryReservation
+      Namespace: AWS/ECS
+      Statistic: Average
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref EcsCluster
+      Period: 300
+      Unit: Percent
+      EvaluationPeriods: 1
+      Threshold: 50
+      TreatMissingData: missing
+      AlarmActions:
+        - !Ref AlarmTopic
+        - !Ref EcsClusterScaleInPolicy
+
+  AlarmTopic:
+      Type: "AWS::SNS::Topic"
+      Properties:
+        TopicName: !Sub ${AppName}-alarmTopic
+        Subscription:
+          - Protocol: email
+            Endpoint: !Ref SNSEndpoint
+
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+      - W2

@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AWS CloudFormation template to create a new ASG + ECS service and cluster autoscaling policies.
+Parameters:
+  AppName:
+    Type: String
+  DBName:
+    Type: String
+  DBUser:
+    NoEcho: 'true'
+    Description: The database admin account username
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric
+      characters.
+  DBAllocatedStorage:
+    Default: '5'
+    Description: The size of the database (Gb)
+    Type: Number
+    MinValue: '5'
+    MaxValue: '1024'
+    ConstraintDescription: must be between 5 and 1024Gb.
+  DbSubnetGroup:
+    Type: String
+  SecurityGroup02:
+    Type: String
+  Vpc:
+    Type: String
+
+Resources:
+# -------------------------------------
+#          SECURITY GROUPS 
+# -------------------------------------
+  # Create a security group for allowing traffic from ECS instances to RDS on port 3306
+  SecurityGroup03:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: 'Allow traffic from the ECS instances to RDS on port 3306.'
+      GroupName: 'vpc01: db access'
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref SecurityGroup02
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          FromPort: 0
+          ToPort: 0
+          CidrIp: '0.0.0.0/0'
+      Tags: 
+        - Key: Name
+          Value: 'vpc01-sg03'
+          
+# -------------------------------------
+#               SECRETS 
+# -------------------------------------
+  # Create a secret to store root password for RDS (used for ECS task definition)
+  DbPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties: 
+      Description: Root password for RDS
+      GenerateSecretString: 
+        PasswordLength: 10
+        ExcludePunctuation: true
+        IncludeSpace: false
+        GenerateStringKey: password
+        SecretStringTemplate: !Join ['', ['{"username": "', !Ref DBUser, '"}']]
+      Name: RDS_CREDENTIALS
+
+  SecretAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties: 
+      SecretId: !Ref DbPasswordSecret
+      TargetId: !Ref MasterDB
+      TargetType: AWS::RDS::DBInstance
+
+
+# -------------------------------------
+#                 RDS 
+# -------------------------------------
+  MasterDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Ref DBName
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      AllocatedStorage: !Ref DBAllocatedStorage
+      DBInstanceClass: db.t2.micro
+      Engine: mysql
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref DbPasswordSecret, ':SecretString:username}}' ]]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DbPasswordSecret, ':SecretString:password}}' ]]
+      MultiAZ: false
+      Tags:
+      - Key: Name
+        Value: !Sub ${AppName}-master
+      VPCSecurityGroups: [ !GetAtt SecurityGroup03.GroupId ]
+      BackupRetentionPeriod: 0
+    DeletionPolicy: Snapshot
+
+Outputs:
+
+  MasterJDBCConnectionString:
+    Description: JDBC connection string for the master database
+    Value: !Join ['', ['jdbc:mysql://', !GetAtt [MasterDB, Endpoint.Address], ':',
+        !GetAtt [MasterDB, Endpoint.Port], /, !Ref 'DBName']]
+
+  DbPasswordSecret:
+    Value: !Ref DbPasswordSecret
+
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+      - W2

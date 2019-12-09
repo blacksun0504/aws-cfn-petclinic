@@ -21,23 +21,40 @@ pipeline {
                 sh script: '''
                 if $(cfn-lint --version); 
                 then
-                    cfn-lint ${WORKSPACE}/Job3/infrastructure.yml;
+                    for i in ${WORKSPACE}/Job3/templates/*.yml; do
+                        [ -f "$i" ] || break
+                        cfn-lint "$i"
+                    done
                 else
                     sudo apt install python-pip -y && sudo pip install cfn-lint
-                    cfn-lint ${WORKSPACE}/Job3/infrastructure.yml;
+                    for i in *.yml; do
+                        [ -f "$i" ] || break
+                        cfn-lint "$i"
+                    done
                 fi'''
                 echo "Validating the template..."
-                sh "aws cloudformation validate-template --template-body file://${WORKSPACE}/Job3/infrastructure.yml"
+                sh script: '''
+                for i in ${WORKSPACE}/Job3/templates/*.yml; do
+                    [ -f "$i" ] || break
+                    aws cloudformation validate-template --template-body file://$i
+                done
+                '''
             }
         }
         stage('Upload Cloudformation templates to S3 bucket') {
             steps {
-                sh "aws s3 cp ${WORKSPACE}/Job3/infrastructure.yml ${s3_bucket}/infrastructure.yml"
+                sh script: '''
+                for i in ${WORKSPACE}/Job3/templates/*.yml; do
+                    [ -f "$i" ] || break
+                    filename=$(basename $i)
+                    aws s3 cp $i ${s3_bucket}/$filename
+                done
+                '''
             }
         }
         stage('Create or update the Cloudformation stack') {
             steps {
-                sh "aws cloudformation deploy --stack-name ${stack_name} --template-file ${WORKSPACE}/Job3/infrastructure.yml --capabilities CAPABILITY_NAMED_IAM"
+                sh "aws cloudformation deploy --stack-name ${stack_name} --template-file ${WORKSPACE}/Job3/templates/main.yml --capabilities CAPABILITY_NAMED_IAM"
             }
         }
     }
