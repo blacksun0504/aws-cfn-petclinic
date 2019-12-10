@@ -54,7 +54,7 @@ Resources:
           Value: !Ref AlbName
       Period: 60
       EvaluationPeriods: 3
-      Threshold: 100
+      Threshold: 20
       TreatMissingData: missing
       AlarmActions:
         - !Ref AlarmTopic
@@ -94,9 +94,9 @@ Resources:
       Dimensions:
         - Name: ClusterName
           Value: !Ref EcsCluster
-      Period: 300
+      Period: 60
       EvaluationPeriods: 1
-      Threshold: 90
+      Threshold: 85
       Unit: Percent
       TreatMissingData: missing
       AlarmActions:
@@ -115,7 +115,7 @@ Resources:
       Dimensions:
         - Name: ClusterName
           Value: !Ref EcsCluster
-      Period: 300
+      Period: 60
       Unit: Percent
       EvaluationPeriods: 1
       Threshold: 50

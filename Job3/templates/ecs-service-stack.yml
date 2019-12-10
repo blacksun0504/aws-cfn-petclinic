@@ -197,14 +197,14 @@ Resources:
           - 
             ScalingAdjustment: 1
             MetricIntervalLowerBound: 0
-            MetricIntervalUpperBound: 100
+            MetricIntervalUpperBound: 5
           - 
             ScalingAdjustment: 2
-            MetricIntervalLowerBound: 100
-            MetricIntervalUpperBound: 200
+            MetricIntervalLowerBound: 5
+            MetricIntervalUpperBound: 10
           - 
             ScalingAdjustment: 3
-            MetricIntervalLowerBound: 200
+            MetricIntervalLowerBound: 15
 
   # Create a scale-in policy based on ALB requests count
   EcsServiceScaleInPolicy:
