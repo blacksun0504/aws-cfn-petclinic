@@ -11,7 +11,7 @@ pipeline {
 
         stage('Clone Git repository') {
             steps{
-                    git branch: 'master', url: 'https://github.com/blacksun0504/petclinic-app.git', credentialsId: 'github_key'
+                    git branch: 'master', url: 'git@github.com:blacksun0504/petclinic-app.git', credentialsId: 'github_key'
             }
         }
 
