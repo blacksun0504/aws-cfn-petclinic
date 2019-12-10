@@ -109,7 +109,7 @@ Resources:
   EcsService:
     Type: AWS::ECS::Service
     Properties: 
-      ServiceName: !Sub srv01-${AppName}
+      ServiceName: !Sub service-${AppName}
       Cluster: !Ref EcsCluster
       TaskDefinition: !Ref EscTaskDef
       DesiredCount: !Ref EcsTaskCount
