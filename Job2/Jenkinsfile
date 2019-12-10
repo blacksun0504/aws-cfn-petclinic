@@ -4,7 +4,7 @@ pipeline {
     }
 
     environment {
-        stack_name= 'EcsStackPetclinic'
+        stack_name= 'StackPetclinic'
     }
 
     stages { 

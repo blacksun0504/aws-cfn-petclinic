@@ -4,7 +4,7 @@ pipeline {
     }
 
     environment {
-        stack_name= 'EcsStackPetclinic'
+        stack_name= 'StackPetclinic'
         s3_bucket = 's3://devopslabs3/cfn-templates'
     }
 
