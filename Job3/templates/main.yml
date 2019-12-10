@@ -52,7 +52,7 @@ Parameters:
     Default: '2'
   EcsTaskCount:
     Type: Number
-    Default: 4
+    Default: 2
   EcsTaskExecPolicy:
     Type: String
     Default: 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'

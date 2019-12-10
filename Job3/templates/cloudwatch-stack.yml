@@ -100,7 +100,7 @@ Resources:
           Value: !Ref EcsCluster
       Period: 60
       EvaluationPeriods: 1
-      Threshold: 85
+      Threshold: 75
       Unit: Percent
       TreatMissingData: missing
       AlarmActions:
@@ -121,8 +121,8 @@ Resources:
           Value: !Ref EcsCluster
       Period: 60
       Unit: Percent
-      EvaluationPeriods: 1
-      Threshold: 50
+      EvaluationPeriods: 2
+      Threshold: 35
       TreatMissingData: missing
       AlarmActions:
         - !Ref AlarmTopic

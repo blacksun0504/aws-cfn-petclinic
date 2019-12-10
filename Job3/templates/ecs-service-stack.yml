@@ -71,8 +71,8 @@ Resources:
         - Name: !Ref AppName
           Essential: true
           Image: !Ref EcsDockerImage
-          Cpu: 300
-          MemoryReservation: 300
+          Cpu: 400
+          MemoryReservation: 400
           PortMappings: 
             - ContainerPort: !Ref EcsContainerPort
               HostPort: 0
@@ -175,8 +175,8 @@ Resources:
   ServiceScalingTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
-      MaxCapacity: 9
-      MinCapacity: 4
+      MaxCapacity: 6
+      MinCapacity: !Ref EcsTaskCount
       ResourceId: !Join ['', [service/, !Ref EcsCluster, /, !GetAtt [EcsService, Name]]]
       RoleARN: !Ref EcsAutoscalingRole
       ScalableDimension: ecs:service:DesiredCount
