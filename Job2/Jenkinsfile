@@ -10,7 +10,7 @@ pipeline {
     stages { 
         stage('PollSCM') {
             steps {
-                checkout([$class: 'GitSCM', branches: [[name: 'master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: 'gitlab-credentials', url: 'https://yoko.ukrtux.com/blacksun0504/petclinic-project.git']]])
+                checkout([$class: 'GitSCM', branches: [[name: 'master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: 'github-credentials', url: 'https://github.com/blacksun0504/petclinic-app.git']]])
                 script {
                         tags = sh(script: "git tag --sort=v:refname | tail -5 ", returnStdout: true).trim()
                     }
@@ -29,7 +29,7 @@ pipeline {
 
         stage('Clone Git repository with cfn templates') {
             steps {
-                git branch: 'master', url: 'git@yoko.ukrtux.com:blacksun0504/jenkins-pipelines-petclinic.git', credentialsId: 'jenkins-gitlab-key'
+                git branch: 'master', url: 'git@github.com:blacksun0504/aws-cfn-petclinic.git', credentialsId: 'github_key'
             }
         }
 

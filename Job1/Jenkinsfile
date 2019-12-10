@@ -11,7 +11,7 @@ pipeline {
 
         stage('Clone Git repository') {
             steps{
-                    git branch: 'master', url: 'git@yoko.ukrtux.com:blacksun0504/petclinic-project.git', credentialsId: 'jenkins-gitlab-key'
+                    git branch: 'master', url: 'https://github.com/blacksun0504/petclinic-app.git', credentialsId: 'github_key'
             }
         }
 
@@ -42,7 +42,7 @@ pipeline {
 
         stage('Tag Git commit') {
             steps{
-                sshagent (credentials: ['jenkins-gitlab-key']) {
+                sshagent (credentials: ['github_key']) {
                     sh("git tag ${app_version}.$BUILD_NUMBER")
                     sh("git push origin ${app_version}.$BUILD_NUMBER")
                 }

@@ -12,7 +12,7 @@ pipeline {
 
         stage('Clone Git repository') {
             steps{
-                    git branch: 'master', url: 'git@yoko.ukrtux.com:blacksun0504/jenkins-pipelines-petclinic.git', credentialsId: 'jenkins-gitlab-key'
+                    git branch: 'master', url: 'git@github.com:blacksun0504/aws-cfn-petclinic.git', credentialsId: 'github_key'
             }
         }
 
