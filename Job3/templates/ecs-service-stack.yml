@@ -176,7 +176,7 @@ Resources:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
       MaxCapacity: 6
-      MinCapacity: !Ref EcsTaskCount
+      MinCapacity: 2
       ResourceId: !Join ['', [service/, !Ref EcsCluster, /, !GetAtt [EcsService, Name]]]
       RoleARN: !Ref EcsAutoscalingRole
       ScalableDimension: ecs:service:DesiredCount
@@ -191,7 +191,7 @@ Resources:
       ScalingTargetId: !Ref ServiceScalingTarget
       StepScalingPolicyConfiguration:
         AdjustmentType: ChangeInCapacity
-        Cooldown: 180
+        Cooldown: 120
         MetricAggregationType: Average
         StepAdjustments:
           - 
@@ -215,7 +215,7 @@ Resources:
       ScalingTargetId: !Ref ServiceScalingTarget
       StepScalingPolicyConfiguration:
         AdjustmentType: ChangeInCapacity
-        Cooldown: 180
+        Cooldown: 120
         MetricAggregationType: Average
         StepAdjustments:
           - 

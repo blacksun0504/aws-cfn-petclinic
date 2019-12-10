@@ -58,8 +58,8 @@ Parameters:
     Default: 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
   EcsDockerImage:
     Type: String
-    Default: 'nginx:latest'
-    # Default: '264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic:2.1.53'
+    # Default: 'nginx:latest'
+    Default: '264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic:2.1.53'
   EcsContainerPort:
     Type: Number
     Default: 80
