@@ -60,13 +60,21 @@ pipeline {
     }
 
     post {
-        success {
-            deleteDir() /* clean up the workspace */
+        always {
+            echo 'The pipeline run has been finished.'  
         }
-
+        success {
+            mail to:"mariia.beschekova@eleks.com", subject:"SUCCESS: ${currentBuild.fullDisplayName}", body: "Build # $BUILD_NUMBER is successful."
+            echo "Build ${BUILD_ID} is successful."
+            cleanWs() /* clean up the workspace */
+        }
+        
         failure {
-            // sh "aws cloudformation delete-stack --stack-name  ${stack_name}"
+            echo "Build ${BUILD_ID} has failed. :("
             sh "aws cloudformation cancel-update-stack --stack-name  ${stack_name}"
+            mail to:"mariia.beschekova@eleks.com", subject:"FAILURE: ${currentBuild.fullDisplayName}", body: "Build # $BUILD_NUMBER has failed. Check console output at $BUILD_URL to view the results."
+            cleanWs() /* clean up the workspace */
         }
     }
+    
 }

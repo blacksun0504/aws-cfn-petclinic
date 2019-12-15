@@ -44,8 +44,19 @@ pipeline {
     }
 
     post {
+        always {
+            echo 'The pipeline run has been finished.'  
+        }
         success {
-            deleteDir() /* clean up the workspace */
+            mail to:"mariia.beschekova@eleks.com", subject:"SUCCESS: ${currentBuild.fullDisplayName}", body: "Build # $BUILD_NUMBER is successful."
+            echo "Build ${BUILD_ID} is successful."
+            cleanWs() /* clean up the workspace */
+        }
+        
+        failure {
+            echo "Build ${BUILD_ID} has failed. :("
+            mail to:"mariia.beschekova@eleks.com", subject:"FAILURE: ${currentBuild.fullDisplayName}", body: "Build # $BUILD_NUMBER has failed. Check console output at $BUILD_URL to view the results."
+            cleanWs() /* clean up the workspace */
         }
     }
 }
