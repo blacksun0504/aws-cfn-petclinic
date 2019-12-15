@@ -55,7 +55,7 @@ pipeline {
             echo 'The pipeline run has been finished.'  
         }
         success {
-            mail to:"mariia.beschekova@eleks.com", subject:"SUCCESS: ${currentBuild.fullDisplayName}", body: "$PROJECT_NAME - Build # $BUILD_NUMBER is successful."
+            mail to:"mariia.beschekova@eleks.com", subject:"SUCCESS: ${currentBuild.fullDisplayName}", body: "Build # $BUILD_NUMBER is successful."
             echo "Build ${BUILD_ID} is successful."
             cleanWs() /* clean up the workspace */
         }
@@ -63,7 +63,7 @@ pipeline {
         failure {
             echo "Build ${BUILD_ID} has failed. :("
             cleanWs() /* clean up the workspace */
-            mail to:"mariia.beschekova@eleks.com", subject:"FAILURE: ${currentBuild.fullDisplayName}", body: "$PROJECT_NAME - Build # $BUILD_NUMBER has failed. Check console output at $BUILD_URL to view the results."
+            mail to:"mariia.beschekova@eleks.com", subject:"FAILURE: ${currentBuild.fullDisplayName}", body: "Build # $BUILD_NUMBER has failed. Check console output at $BUILD_URL to view the results."
         }
     }
 }
