@@ -62,6 +62,7 @@ pipeline {
         failure {
             echo "Build ${BUILD_ID} has failed. :("
             cleanWs() /* clean up the workspace */
+            mail to:"mariia.beshekova@eleks.com", subject:"FAILURE: ${currentBuild.fullDisplayName}", body: "$PROJECT_NAME - Build # $BUILD_NUMBER has failed. Check console output at $BUILD_URL to view the results."
         }
     }
 }
