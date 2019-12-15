@@ -55,6 +55,7 @@ pipeline {
             echo 'The pipeline run has been finished.'  
         }
         success {
+            mail to:"mariia.beshekova@eleks.com", subject:"SUCCESS: ${currentBuild.fullDisplayName}", body: "$PROJECT_NAME - Build # $BUILD_NUMBER is successful."
             echo "Build ${BUILD_ID} is successful."
             cleanWs() /* clean up the workspace */
         }
