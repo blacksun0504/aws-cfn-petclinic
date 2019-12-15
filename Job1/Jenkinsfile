@@ -59,15 +59,16 @@ pipeline {
             echo "Build ${BUILD_ID} is successful."
             mail to:"mariia.beschekova@eleks.com", subject:"SUCCESS: ${currentBuild.fullDisplayName}", body: "Build # $BUILD_NUMBER is successful."
             /*send commit status to SCM*/
-            githubNotify account: 'blacksun0504', repo: "${scm_repo}", status: 'SUCCESS', description: 'The build has succeeded.', sha: "$GIT_COMMIT", credentialsId: 'github-credentials'
+            /*githubNotify account: 'blacksun0504', repo: "${scm_repo}", status: 'SUCCESS', description: 'The build has succeeded.', sha: "$GIT_COMMIT", credentialsId: 'github-credentials'*/
+            setBuildStatus("Build complete", "SUCCESS");
             cleanWs() /* clean up the workspace */
         }
         
         failure {
             echo "Build ${BUILD_ID} has failed. :("
-            // cleanWs() /* clean up the workspace */
             mail to:"mariia.beschekova@eleks.com", subject:"FAILURE: ${currentBuild.fullDisplayName}", body: "Build # $BUILD_NUMBER has failed. Check console output at $BUILD_URL to view the results."
-            githubNotify status: 'FAILURE', description: 'The build has failed.'
+            setBuildStatus("Build complete", "FAILURE");
+            cleanWs() /* clean up the workspace */
         }
     }
 }
