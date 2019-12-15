@@ -5,13 +5,14 @@ pipeline {
 
     environment {
         registry = "264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic"
+        scm_repo = 'petclinic-app'
     }
 
     stages { 
 
         stage('Clone Git repository') {
             steps{
-                    git branch: 'master', url: 'git@github.com:blacksun0504/petclinic-app.git', credentialsId: 'github_key'
+                    git branch: 'master', url: "git@github.com:blacksun0504/${scm_repo}.git", credentialsId: 'github_key'
             }
         }
 
@@ -58,7 +59,7 @@ pipeline {
             echo "Build ${BUILD_ID} is successful."
             mail to:"mariia.beschekova@eleks.com", subject:"SUCCESS: ${currentBuild.fullDisplayName}", body: "Build # $BUILD_NUMBER is successful."
             /*send commit status to SCM*/
-            githubNotify status: 'SUCCESS', description: 'The build has succeeded.'
+            githubNotify account: 'blacksun0504', repo: "${scm_repo}", status: 'SUCCESS', description: 'The build has succeeded.' sha: "$GIT_COMMIT", credentialsId: 'github_key'
             cleanWs() /* clean up the workspace */
         }
         
