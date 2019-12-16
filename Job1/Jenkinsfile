@@ -14,6 +14,7 @@ pipeline {
         stage('Clone Git repository') {
             steps{
                     git branch: 'master', url: "git@github.com:blacksun0504/${scm_repo}.git", credentialsId: 'github_key'
+                    GIT_COMMIT = sh("git rev-parse HEAD")
             }
         }
 
