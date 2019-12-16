@@ -15,7 +15,7 @@ pipeline {
             steps{
                     git branch: 'master', url: "git@github.com:blacksun0504/${scm_repo}.git", credentialsId: 'github_key'
                     script {
-                        env.last_commit = sh("git rev-parse HEAD")
+                        last_commit=sh(returnStdout: true, script:'git rev-parse HEAD')
                     }
             }
         }
