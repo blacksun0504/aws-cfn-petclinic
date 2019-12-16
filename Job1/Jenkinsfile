@@ -64,7 +64,7 @@ pipeline {
             mail to:"mariia.beschekova@eleks.com", subject:"SUCCESS: ${currentBuild.fullDisplayName}", body: "Build # $BUILD_NUMBER is successful."
             /*send commit status to SCM*/
             withCredentials([usernamePassword(credentialsId: 'github-credentials', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
-                sh 'curl -X POST --user $USERNAME:$PASSWORD --data  "{\"state\": \"success\"}" --url $GITHUB_API_URL/statuses/${last_commit}'
+                sh "curl -X POST --user $USERNAME:$PASSWORD --data  \"{\"state\": \"success\"}\" --url ${GITHUB_API_URL}/statuses/${last_commit}"
             }
             cleanWs() /* clean up the workspace */
         }
