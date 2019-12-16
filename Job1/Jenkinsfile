@@ -13,10 +13,10 @@ pipeline {
 
         stage('Clone Git repository') {
             steps{
-                    git branch: 'master', url: "git@github.com:blacksun0504/${scm_repo}.git", credentialsId: 'github_key'
-                    script {
-                        last_commit=sh(returnStdout: true, script:'git rev-parse HEAD')
-                    }
+                git branch: 'master', url: "git@github.com:blacksun0504/${scm_repo}.git", credentialsId: 'github_key'
+                script {
+                    last_commit=sh(returnStdout: true, script:'git rev-parse HEAD')
+                }
             }
         }
 
