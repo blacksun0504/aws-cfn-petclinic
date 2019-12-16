@@ -6,6 +6,7 @@ pipeline {
     environment {
         registry = "264800517173.dkr.ecr.us-west-2.amazonaws.com/petclinic"
         scm_repo = 'petclinic-app'
+        GITHUB_API_URL = 'https://api.github.com/repos/blacksun0504/petclinic-app'
     }
 
     stages { 
